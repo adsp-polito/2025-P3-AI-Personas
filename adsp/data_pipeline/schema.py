@@ -410,7 +410,16 @@ class BrandLandscape(BaseModel):
     top_competitors_household_penetration: List[BrandHouseholdPenetration] = Field(
         default_factory=list
     )
-    sub_brand_deep_dive: Optional[SubBrandDeepDive] = None
+    sub_brand_deep_dive: List[dict] = Field(default_factory=list)
+
+    class Config:
+        extra = "allow"
+
+
+class TypesOfCoffeeDrinksConsumedEntry(BaseModel):
+    drink: Optional[str] = None
+    percentage: Optional[float] = None
+    index: Optional[float] = None
 
     class Config:
         extra = "allow"
@@ -421,6 +430,9 @@ class CoffeeConsumptionTraits(BaseModel):
     consumption_moment: Optional[dict] = None
     time_of_consumption: Optional[TimeOfConsumption] = None
     coffee_choice_motivations: List[CoffeeChoiceMotivation] = Field(default_factory=list)
+    types_of_coffee_drinks_consumed: List[TypesOfCoffeeDrinksConsumedEntry] = Field(
+        default_factory=list
+    )
     type_of_coffee_used: List[CoffeeTypeEntry] = Field(default_factory=list)
     preparation_method: List[PreparationMethodEntry] = Field(default_factory=list)
     consumption_metrics: Optional[ConsumptionMetrics] = None
