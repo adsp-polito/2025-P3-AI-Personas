@@ -7,6 +7,10 @@ notebook
 numpy
 pandas
 pip
+pydantic
+openai
+pymupdf
+pdf2image
 pytest
 python-dotenv
 ruff
