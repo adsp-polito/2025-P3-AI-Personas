@@ -47,6 +47,7 @@ def build_config(args: argparse.Namespace) -> PersonaExtractionConfig:
     cfg.dpi = args.dpi
     cfg.page_images_dir = Path(args.page_images_dir)
     cfg.raw_responses_dir = Path(args.raw_responses_dir)
+    cfg.reuse_cache = args.reuse_cache
     cfg.merged_output_path = Path(args.merged_output_path)
     cfg.qa_report_path = Path(args.qa_report_path)
     return cfg
@@ -146,6 +147,13 @@ def main(raw_args: Optional[list[str]] = None) -> None:
         help="Dir to store rendered pages.",
     )
     parser.add_argument(
+        "--no-cache",
+        dest="reuse_cache",
+        action="store_false",
+        default=default_cfg.reuse_cache,
+        help="Ignore cached page responses and force re-extraction.",
+    )
+    parser.add_argument(
         "--raw-responses-dir",
         type=str,
         default=str(default_cfg.raw_responses_dir),
@@ -166,12 +174,27 @@ def main(raw_args: Optional[list[str]] = None) -> None:
     args = parser.parse_args(raw_args)
 
     config = build_config(args)
+    logger.info("Prepared persona extraction configuration.")
     logger.info(f"Using PDF: {config.pdf_path}")
     logger.info(f"Model: {config.vllm_model} @ {config.vllm_base_url}")
     if config.page_range:
         logger.info(f"Page range: {config.page_range}")
+    if config.reuse_cache:
+        cache_files = (
+            list(config.raw_responses_dir.glob("page_*.json"))
+            if config.raw_responses_dir.exists()
+            else []
+        )
+        logger.info(
+            f"Cache reuse enabled; {len(cache_files)} cached page files available in "
+            f"{config.raw_responses_dir}"
+        )
+    else:
+        logger.info("Cache reuse disabled; existing cached pages will be ignored.")
 
+    logger.info("Starting persona extraction run...")
     result = run_persona_extraction_pipeline(config)
+    logger.info("Persona extraction pipeline finished.")
     personas = result["personas"]
     logger.info(f"Personas extracted: {list(personas.keys())}")
     summary = {

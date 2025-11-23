@@ -9,7 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 from loguru import logger
 
@@ -28,7 +28,7 @@ SYSTEM_PROMPT = (
     "You extract persona data into the PersonaProfileModel schema. "
     "persona_id must be lowercase kebab-case (letters/numbers/hyphens only), "
     "matching the page if shown; otherwise derive from the segment name and locale "
-    "(e.g., curious-connoisseurs-fr). "
+    "(e.g., curious-connoisseurs). "
     "Top-level keys: persona_id, segment_name, locale, "
     "source_reference{document,pages,extraction_notes}, "
     "core_profile_overview{market_impact{population_share_percentage,value_share_percentage,"
@@ -130,6 +130,7 @@ class PersonaExtractionConfig:
     qa_report_path: Path = config.INTERIM_DATA_DIR / "persona_extraction" / "qa_report.json"
     debug: bool = False
     debug_dir: Path = config.INTERIM_DATA_DIR / "persona_extraction" / "debug"
+    reuse_cache: bool = True
 
     vllm_base_url: str = field(
         default_factory=lambda: os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
@@ -199,16 +200,22 @@ class PDFRenderer:
         self.dpi = dpi
 
     def render(
-        self, pdf_path: Path, output_dir: Path, page_range: Optional[tuple[int, int]] = None
+        self,
+        pdf_path: Path,
+        output_dir: Path,
+        page_range: Optional[tuple[int, int]] = None,
+        reuse_existing_images: bool = True,
     ) -> List[PageImage]:
         output_dir.mkdir(parents=True, exist_ok=True)
         try:
             import fitz  # type: ignore
 
-            return self._render_with_pymupdf(pdf_path, output_dir, page_range)
+            return self._render_with_pymupdf(pdf_path, output_dir, page_range, reuse_existing_images)
         except ImportError:
             try:
-                return self._render_with_pdf2image(pdf_path, output_dir, page_range)
+                return self._render_with_pdf2image(
+                    pdf_path, output_dir, page_range, reuse_existing_images
+                )
             except ImportError as exc:
                 raise ImportError(
                     "Install `pymupdf` or `pdf2image` to render PDF pages. "
@@ -218,8 +225,34 @@ class PDFRenderer:
             logger.error(f"Failed to render PDF with PyMuPDF: {exc}")
             raise
 
+    @staticmethod
+    def _load_existing_image(image_path: Path, page_number: int) -> Optional[PageImage]:
+        if not image_path.exists():
+            return None
+        try:
+            from PIL import Image  # type: ignore
+        except ImportError:
+            logger.debug("Pillow not installed; cannot reuse existing page image.")
+            return None
+        try:
+            with Image.open(image_path) as img:
+                width, height = img.size
+            return PageImage(
+                page_number=page_number,
+                image_path=image_path,
+                width=width,
+                height=height,
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to read existing page image {image_path}: {exc}")
+            return None
+
     def _render_with_pymupdf(
-        self, pdf_path: Path, output_dir: Path, page_range: Optional[tuple[int, int]]
+        self,
+        pdf_path: Path,
+        output_dir: Path,
+        page_range: Optional[tuple[int, int]],
+        reuse_existing_images: bool,
     ) -> List[PageImage]:
         import fitz  # type: ignore
 
@@ -228,9 +261,15 @@ class PDFRenderer:
         images: List[PageImage] = []
 
         for page_idx in range(start - 1, end):
+            out_path = output_dir / f"page_{page_idx + 1:04d}.png"
+            if reuse_existing_images:
+                existing = self._load_existing_image(out_path, page_idx + 1)
+                if existing:
+                    images.append(existing)
+                    logger.debug(f"Reusing rendered page {page_idx + 1} -> {out_path}")
+                    continue
             page = doc.load_page(page_idx)
             pix = page.get_pixmap(dpi=self.dpi)
-            out_path = output_dir / f"page_{page_idx + 1:04d}.png"
             pix.save(out_path)
             images.append(
                 PageImage(
@@ -244,20 +283,77 @@ class PDFRenderer:
         return images
 
     def _render_with_pdf2image(
-        self, pdf_path: Path, output_dir: Path, page_range: Optional[tuple[int, int]]
+        self,
+        pdf_path: Path,
+        output_dir: Path,
+        page_range: Optional[tuple[int, int]],
+        reuse_existing_images: bool,
     ) -> List[PageImage]:
-        from pdf2image import convert_from_path  # type: ignore
+        from pdf2image import convert_from_path, pdfinfo_from_path  # type: ignore
 
-        start, end = page_range if page_range else (1, None)
-        images = convert_from_path(
-            pdf_path,
-            dpi=self.dpi,
-            first_page=start,
-            last_page=end,
-        )
+        start: int
+        end: Optional[int]
+        if page_range:
+            start, end = page_range
+        else:
+            try:
+                info = pdfinfo_from_path(pdf_path)
+                end = int(info.get("Pages", 0))
+                if end <= 0:
+                    raise ValueError("Page count not available")
+                start = 1
+            except Exception as exc:  # pragma: no cover - best-effort fallback
+                logger.warning(f"Could not read PDF info to reuse renders: {exc}")
+                start, end = 1, None
+
         page_images: List[PageImage] = []
+        missing_pages: List[int] = []
+
+        if end is not None:
+            for idx in range(start, end + 1):
+                out_path = output_dir / f"page_{idx:04d}.png"
+                if reuse_existing_images:
+                    existing = self._load_existing_image(out_path, idx)
+                    if existing:
+                        page_images.append(existing)
+                        logger.debug(f"Reusing rendered page {idx} -> {out_path}")
+                        continue
+                missing_pages.append(idx)
+
+            if not missing_pages:
+                return sorted(page_images, key=lambda p: p.page_number)
+
+            for page_number in missing_pages:
+                images = convert_from_path(
+                    pdf_path,
+                    dpi=self.dpi,
+                    first_page=page_number,
+                    last_page=page_number,
+                )
+                for image in images:
+                    out_path = output_dir / f"page_{page_number:04d}.png"
+                    image.save(out_path, "PNG")
+                    page_images.append(
+                        PageImage(
+                            page_number=page_number,
+                            image_path=out_path,
+                            width=image.width,
+                            height=image.height,
+                        )
+                    )
+                    logger.debug(f"Rendered page {page_number} -> {out_path}")
+            return sorted(page_images, key=lambda p: p.page_number)
+
+        # end is None, render entire document; reuse existing where possible after render
+        images = convert_from_path(pdf_path, dpi=self.dpi)
         for idx, image in enumerate(images, start=start):
             out_path = output_dir / f"page_{idx:04d}.png"
+            if reuse_existing_images:
+                existing = self._load_existing_image(out_path, idx)
+                if existing:
+                    page_images.append(existing)
+                    logger.debug(f"Reusing rendered page {idx} -> {out_path}")
+                    continue
             image.save(out_path, "PNG")
             page_images.append(
                 PageImage(
@@ -295,14 +391,26 @@ class VLLMOpenAIExtractor:
                 "Set VLLM_MODEL to the OpenAI-compatible vision model name (e.g., llava)."
             )
 
-    def extract_pages(self, pages: Sequence[PageImage]) -> List[PageExtractionResult]:
+    def extract_pages(
+        self,
+        pages: Sequence[PageImage],
+        on_result: Optional[Callable[[PageExtractionResult], None]] = None,
+    ) -> List[PageExtractionResult]:
         if not pages:
             return []
         results: List[PageExtractionResult] = []
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
             future_map = {executor.submit(self._extract_single_page, page): page for page in pages}
             for future in as_completed(future_map):
-                results.append(future.result())
+                result = future.result()
+                results.append(result)
+                if on_result:
+                    try:
+                        on_result(result)
+                    except Exception as exc:  # pragma: no cover - defensive logging
+                        logger.warning(
+                            f"Failed to handle on_result for page {result.page_number}: {exc}"
+                        )
         return sorted(results, key=lambda r: r.page_number)
 
     def _extract_single_page(self, page: PageImage) -> PageExtractionResult:
@@ -496,13 +604,43 @@ class PersonaExtractionPipeline:
     def run(self) -> Dict[str, Any]:
         if not self.config.pdf_path.exists():
             raise FileNotFoundError(f"PDF not found at {self.config.pdf_path}")
+        logger.info("Starting persona extraction pipeline")
         pages = self.renderer.render(
-            self.config.pdf_path, self.config.page_images_dir, self.config.page_range
+            self.config.pdf_path,
+            self.config.page_images_dir,
+            self.config.page_range,
+            reuse_existing_images=self.config.reuse_cache,
         )
         logger.info(f"Rendered {len(pages)} pages from {self.config.pdf_path}")
 
-        page_results = self.extractor.extract_pages(pages)
-        self._persist_page_results(page_results)
+        cached_results: Dict[int, PageExtractionResult] = {}
+        if self.config.reuse_cache:
+            cached_results = self._load_cached_results(pages)
+            if cached_results:
+                logger.info(
+                    f"Reusing cached responses for {len(cached_results)} pages from "
+                    f"{self.config.raw_responses_dir}"
+                )
+        else:
+            logger.info("Cache reuse disabled; all pages will be extracted.")
+
+        pages_to_extract = [page for page in pages if page.page_number not in cached_results]
+        if pages_to_extract:
+            logger.info(
+                f"Extracting personas for {len(pages_to_extract)} pages "
+                f"(max_concurrent_requests={self.extractor.max_concurrent})"
+            )
+            new_results = self.extractor.extract_pages(
+                pages_to_extract, on_result=lambda r: self._persist_page_results([r])
+            )
+        else:
+            logger.info("No remaining pages to extract after applying cache.")
+            new_results = []
+
+        page_results = sorted(
+            [*cached_results.values(), *new_results], key=lambda r: r.page_number
+        )
+        logger.info(f"Merging and writing outputs for {len(page_results)} pages processed")
         for result in page_results:
             self.merger.apply_page_result(result)
 
@@ -510,6 +648,51 @@ class PersonaExtractionPipeline:
             self.config.merged_output_path, self.config.qa_report_path, page_results
         )
         return {"personas": self.merger.personas, "page_results": page_results}
+
+    def _load_cached_results(self, pages: Sequence[PageImage]) -> Dict[int, PageExtractionResult]:
+        cached: Dict[int, PageExtractionResult] = {}
+        for page in pages:
+            cache_path = self.config.raw_responses_dir / f"page_{page.page_number:04d}.json"
+            if not cache_path.exists():
+                continue
+            try:
+                with cache_path.open("r", encoding="utf-8") as f:
+                    payload = json.load(f)
+                parsed = payload.get("parsed") if isinstance(payload, dict) else None
+                if parsed is not None and not isinstance(parsed, dict):
+                    parsed = None
+                patch = payload.get("patch") if isinstance(payload, dict) else {}
+                if not isinstance(patch, dict):
+                    patch = {}
+                if not patch and parsed:
+                    patch = parsed.get("patch") or {}
+                    if not isinstance(patch, dict):
+                        patch = {}
+                persona_id = None
+                if isinstance(payload, dict):
+                    persona_id = payload.get("persona_id")
+                if persona_id is None and parsed:
+                    persona_id = parsed.get("persona_id")
+                raw_text = payload.get("raw_text", "") if isinstance(payload, dict) else ""
+                error = payload.get("error") if isinstance(payload, dict) else None
+                if error:
+                    logger.info(
+                        f"Skipping cached page {page.page_number} because previous run failed: {error}"
+                    )
+                    continue
+                cached[page.page_number] = PageExtractionResult(
+                    page_number=page.page_number,
+                    raw_text=raw_text,
+                    parsed=parsed,
+                    persona_id=persona_id,
+                    patch=patch,
+                    error=error,
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"Could not load cached result for page {page.page_number} ({cache_path}): {exc}"
+                )
+        return cached
 
     def _persist_page_results(self, results: Iterable[PageExtractionResult]) -> None:
         self.config.raw_responses_dir.mkdir(parents=True, exist_ok=True)
@@ -523,6 +706,7 @@ class PersonaExtractionPipeline:
                 "parsed": result.parsed,
                 "error": result.error,
                 "raw_text": result.raw_text,
+                "patch": result.patch,
             }
             with out_path.open("w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
