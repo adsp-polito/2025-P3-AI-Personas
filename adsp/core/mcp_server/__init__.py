@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict
 
 from adsp.core.mcp_server.tools import MCPClient
@@ -12,7 +12,8 @@ from adsp.core.mcp_server.tools import MCPClient
 class MCPServer:
     """Coordinates MCP tool calls and caches their responses for reuse."""
 
-    mcp: MCPClient = MCPClient()
+    # mcp: MCPClient = MCPClient()
+    mcp: MCPClient = field(default_factory=MCPClient())
     _cache: Dict[str, dict] = None
 
     def __post_init__(self) -> None:
