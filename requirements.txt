@@ -5,12 +5,14 @@ matplotlib
 mkdocs
 notebook
 numpy
+langchain
 pandas
 pip
 pydantic
 openai
 pymupdf
 pdf2image
+pillow
 pytest
 python-dotenv
 ruff

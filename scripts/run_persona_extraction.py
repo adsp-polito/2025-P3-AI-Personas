@@ -49,7 +49,10 @@ def build_config(args: argparse.Namespace) -> PersonaExtractionConfig:
     cfg.raw_responses_dir = Path(args.raw_responses_dir)
     cfg.reuse_cache = args.reuse_cache
     cfg.merged_output_path = Path(args.merged_output_path)
+    cfg.persona_output_dir = Path(args.persona_output_dir)
     cfg.qa_report_path = Path(args.qa_report_path)
+    cfg.structured_pages_output_path = Path(args.structured_pages_output_path)
+    cfg.context_window = args.context_window
     return cfg
 
 
@@ -166,10 +169,28 @@ def main(raw_args: Optional[list[str]] = None) -> None:
         help="Merged personas output path.",
     )
     parser.add_argument(
+        "--persona-output-dir",
+        type=str,
+        default=str(default_cfg.persona_output_dir),
+        help="Directory to store individual persona JSON files.",
+    )
+    parser.add_argument(
         "--qa-report-path",
         type=str,
         default=str(default_cfg.qa_report_path),
         help="QA report output path.",
+    )
+    parser.add_argument(
+        "--structured-pages-output-path",
+        type=str,
+        default=str(default_cfg.structured_pages_output_path),
+        help="Where to store structured page-level JSON output.",
+    )
+    parser.add_argument(
+        "--context-window",
+        type=int,
+        default=default_cfg.context_window,
+        help="Number of adjacent pages to send alongside each primary page for context.",
     )
     args = parser.parse_args(raw_args)
 
@@ -195,14 +216,20 @@ def main(raw_args: Optional[list[str]] = None) -> None:
     logger.info("Starting persona extraction run...")
     result = run_persona_extraction_pipeline(config)
     logger.info("Persona extraction pipeline finished.")
-    personas = result["personas"]
-    logger.info(f"Personas extracted: {list(personas.keys())}")
+    personas = result.get("personas", [])
+    persona_ids = [p.get("persona_id") for p in personas if isinstance(p, dict)]
+    logger.info(f"Personas extracted: {persona_ids}")
     summary = {
-        "personas": list(personas.keys()),
+        "persona_ids": persona_ids,
         "pages_processed": [r.page_number for r in result["page_results"]],
-        "pages_with_persona": [r.page_number for r in result["page_results"] if r.persona_id],
+        "pages_with_persona": [
+            r.page_number
+            for r in result["page_results"]
+            if r.parsed and isinstance(r.parsed.get("personas"), list) and r.parsed.get("personas")
+        ],
         "output_path": str(config.merged_output_path),
         "qa_report_path": str(config.qa_report_path),
+        "structured_pages_output_path": str(config.structured_pages_output_path),
     }
     print(json.dumps(summary, indent=2))
 
