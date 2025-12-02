@@ -50,9 +50,19 @@ def build_config(args: argparse.Namespace) -> PersonaExtractionConfig:
     cfg.reuse_cache = args.reuse_cache
     cfg.merged_output_path = Path(args.merged_output_path)
     cfg.persona_output_dir = Path(args.persona_output_dir)
+    cfg.reasoning_output_dir = Path(args.reasoning_output_dir)
     cfg.qa_report_path = Path(args.qa_report_path)
     cfg.structured_pages_output_path = Path(args.structured_pages_output_path)
     cfg.context_window = args.context_window
+    cfg.generate_reasoning_profiles = args.generate_reasoning_profiles
+    cfg.reasoning_base_url = args.reasoning_base_url
+    cfg.reasoning_model = args.reasoning_model
+    cfg.reasoning_api_key = args.reasoning_api_key
+    cfg.reasoning_temperature = args.reasoning_temperature
+    cfg.reasoning_top_p = args.reasoning_top_p
+    cfg.reasoning_max_tokens = args.reasoning_max_tokens
+    cfg.reasoning_max_input_chars = args.reasoning_max_input_chars
+    cfg.reasoning_max_concurrent = args.reasoning_max_concurrent
     return cfg
 
 
@@ -175,6 +185,12 @@ def main(raw_args: Optional[list[str]] = None) -> None:
         help="Directory to store individual persona JSON files.",
     )
     parser.add_argument(
+        "--reasoning-output-dir",
+        type=str,
+        default=str(default_cfg.reasoning_output_dir),
+        help="Directory to store reasoning/common traits per persona.",
+    )
+    parser.add_argument(
         "--qa-report-path",
         type=str,
         default=str(default_cfg.qa_report_path),
@@ -191,6 +207,66 @@ def main(raw_args: Optional[list[str]] = None) -> None:
         type=int,
         default=default_cfg.context_window,
         help="Number of adjacent pages to send alongside each primary page for context.",
+    )
+    parser.add_argument(
+        "--generate-reasoning-profiles",
+        action="store_true",
+        default=default_cfg.generate_reasoning_profiles,
+        help="Enable LLM reasoning to derive style/value/guardrail profiles.",
+    )
+    parser.add_argument(
+        "--disable-reasoning-profiles",
+        dest="generate_reasoning_profiles",
+        action="store_false",
+        help="Disable LLM reasoning enrichment.",
+    )
+    parser.add_argument(
+        "--reasoning-base-url",
+        type=str,
+        default=default_cfg.reasoning_base_url,
+        help="OpenAI-compatible base URL for reasoning model.",
+    )
+    parser.add_argument(
+        "--reasoning-model",
+        type=str,
+        default=default_cfg.reasoning_model,
+        help="Reasoning (text) model name.",
+    )
+    parser.add_argument(
+        "--reasoning-api-key",
+        type=str,
+        default=default_cfg.reasoning_api_key,
+        help="API key for reasoning model.",
+    )
+    parser.add_argument(
+        "--reasoning-temperature",
+        type=float,
+        default=default_cfg.reasoning_temperature,
+        help="Sampling temperature for reasoning model.",
+    )
+    parser.add_argument(
+        "--reasoning-top-p",
+        type=float,
+        default=default_cfg.reasoning_top_p,
+        help="Top-p for reasoning model.",
+    )
+    parser.add_argument(
+        "--reasoning-max-tokens",
+        type=int,
+        default=default_cfg.reasoning_max_tokens,
+        help="Max tokens for reasoning model response.",
+    )
+    parser.add_argument(
+        "--reasoning-max-input-chars",
+        type=int,
+        default=default_cfg.reasoning_max_input_chars,
+        help="Maximum character length of key indicator payload before chunking.",
+    )
+    parser.add_argument(
+        "--reasoning-max-concurrent",
+        type=int,
+        default=default_cfg.reasoning_max_concurrent,
+        help="Max concurrent requests for the reasoning model.",
     )
     args = parser.parse_args(raw_args)
 

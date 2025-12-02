@@ -13,6 +13,7 @@ from .extractor import VLLMOpenAIExtractor
 from .merger import PersonaMerger
 from .models import PageExtractionResult, PageImage
 from .renderer import PDFRenderer
+from .reasoner import PersonaReasoner
 
 
 class PersonaExtractionPipeline:
@@ -24,6 +25,7 @@ class PersonaExtractionPipeline:
             document_name=self.config.pdf_path.name,
             merge_strategy=self.config.merge_strategy,
         )
+        self.reasoner = PersonaReasoner(self.config)
         self._chain: RunnableSequence = self._build_chain()
 
     def _build_chain(self) -> RunnableSerializable[Any, Any]:
@@ -32,6 +34,7 @@ class PersonaExtractionPipeline:
             | RunnableLambda(self._prepare_extraction_plan).with_config(run_name="PrepareExtractionPlan")
             | RunnableLambda(self._extract_and_collect).with_config(run_name="ExtractPages")
             | RunnableLambda(self._merge_and_write).with_config(run_name="MergeOutputs")
+            | RunnableLambda(self._run_reasoner).with_config(run_name="Reasoner")
         )
 
     def run(self) -> Dict[str, Any]:
@@ -106,10 +109,20 @@ class PersonaExtractionPipeline:
         self._write_page_outputs(page_results)
         return {
             "personas": list(self.merger.personas.values()),
+            "personas_map": self.merger.personas,
             "general_content": self.merger.general_content,
             "pages": self.merger.pages,
             "page_results": page_results,
         }
+
+    def _run_reasoner(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        persona_map = state.get("personas_map") or self.merger.personas
+        self.reasoner.process(
+            persona_map,
+            output_dir=self.config.reasoning_output_dir,
+            reuse_cache=self.config.reuse_cache,
+        )
+        return state
 
     def _write_page_outputs(self, page_results: Sequence[PageExtractionResult]) -> None:
         path = self.config.structured_pages_output_path
