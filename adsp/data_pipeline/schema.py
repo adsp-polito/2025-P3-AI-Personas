@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field
@@ -157,4 +159,15 @@ class PersonaProfileModel(BaseModel):
 
 PersonaProfile = PersonaProfileModel
 
-__all__ = ["PersonaProfile", "PersonaProfileModel"]
+
+def load_persona_profile(path: Union[str, Path]) -> PersonaProfileModel:
+    """Read a persona profile JSON file into a PersonaProfileModel instance."""
+    json_path = Path(path)
+    if not json_path.is_file():
+        raise FileNotFoundError(f"Persona profile file not found: {json_path}")
+
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    return PersonaProfileModel(**payload)
+
+
+__all__ = ["PersonaProfile", "PersonaProfileModel", "load_persona_profile"]

@@ -6,6 +6,8 @@ mkdocs
 notebook
 numpy
 langchain
+langchain-huggingface
+sentence-transformers
 pandas
 pip
 pydantic
