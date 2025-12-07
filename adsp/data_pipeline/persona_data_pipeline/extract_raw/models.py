@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 
 @dataclass
@@ -20,6 +20,4 @@ class PageExtractionResult:
     page_number: int
     raw_text: str
     parsed: Optional[dict]
-    persona_id: Optional[str]
-    patch: Dict[str, Any]
     error: Optional[str] = None
