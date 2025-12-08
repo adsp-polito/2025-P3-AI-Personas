@@ -1,4 +1,4 @@
-"""Merge and validation utilities for persona extraction results."""
+"""Merge and validation utilities for persona extraction results. Merge together JSON results from individual pages into a single, coherent data structure."""
 
 from __future__ import annotations
 
@@ -22,6 +22,9 @@ class PersonaMerger:
         self.parse_failures: List[dict] = []
 
     def apply_page_result(self, result: PageExtractionResult) -> None:
+        """
+        It takes a single PageExtractionResult and integrates its data into the main self.personas and self.general_content stores
+        """
         if result.error:
             self.parse_failures.append(
                 {"page": result.page_number, "error": result.error, "raw": result.raw_text}
@@ -100,6 +103,10 @@ class PersonaMerger:
     def _merge_indicator_lists(
         self, existing: List[Any], incoming: List[Any], path: str
     ) -> List[Any]:
+        """
+        A specialized function for merging lists of indicators. It can find indicators with the same ID/label and
+        deep-merge their contents, rather than just appending duplicates
+        """
         merged: List[Any] = []
         lookup: Dict[str, Dict[str, Any]] = {}
         seen_misc: set[Any] = set()
@@ -166,6 +173,11 @@ class PersonaMerger:
     def _deep_merge(
         self, target: Dict[str, Any], incoming: Dict[str, Any], parent_path: str
     ) -> None:
+        """
+        This is the core merging logic. It recursively traverses the incoming JSON from a new page and merges it into the
+        existing target persona dictionary. It handles different data types (dicts, lists) and uses the merge_strategy from the config to
+        decide whether to overwrite existing values, fill them if empty, or append to lists
+        """
         for key, value in incoming.items():
             if key == "persona_id":
                 continue
@@ -220,6 +232,11 @@ class PersonaMerger:
         page_results: Sequence[PageExtractionResult],
         persona_output_dir: Optional[Path] = None,
     ) -> None:
+        """
+        After all pages have been applied, this method writes the final merged data to several files: the main personas.json,
+        individual files for each persona, and a qa_report.json that summarizes the extraction process (e.g., which pages failed to
+        parse)
+        """
         output_path.parent.mkdir(parents=True, exist_ok=True)
         qa_report_path.parent.mkdir(parents=True, exist_ok=True)
 

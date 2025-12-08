@@ -12,6 +12,7 @@ from adsp import config
 
 @dataclass
 class PersonaExtractionConfig:
+    # define default values
     pdf_path: Path = config.DATA_DIR / "raw" / "lavazza" / "customer-segmentation" / (
         "2023 03_FR_Consumers Segmentation France.pdf"
     )
