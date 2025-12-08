@@ -18,7 +18,9 @@ class PromptBuilder:
     registry: PersonaRegistry = field(default_factory=PersonaRegistry)
 
     def build(self, persona_id: str, query: str, context: str) -> str:
+        # get persona rules
         persona = self.registry.get(persona_id)
+        # get system prompt from persona
         system_prompt = self._system_prompt_for_persona(persona)
         return f"{system_prompt}\n\nContext:\n{context}\n\nQuestion:\n{query}"
 
@@ -42,6 +44,7 @@ class PromptBuilder:
                     return persona_to_system_prompt(profile)
                 except ValidationError:
                     pass
+            # get value of preamble, otherwise use the default value
             return persona.get("preamble", "You are an AI persona.")
 
         return "You are an AI persona."
