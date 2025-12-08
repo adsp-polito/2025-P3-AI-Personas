@@ -6,20 +6,17 @@ High-level overview of how a PDF becomes persona data and derived reasoning arti
 1) **Ingest & Render**  
    - Load the PDF and render pages to images (reuse cached renders when enabled).
 
-2) **Plan & Fetch**  
-   - Determine which pages need extraction, skipping those with cached raw responses when caching is on.
-
-3) **VLLM Page Extraction**  
+2) **VLLM Page Extraction**  
    - Send each target page (plus optional context) to the vision model with the indicator-centric persona prompt. The prompt is generalized to pull persona indicators from any document type (not tied to fixed templates).  
-   - Persist raw responses and parsed JSON per page; optionally write debug text.
+   - Persist raw responses and parsed JSON per page; optionally write debug text. When caching is on, skip extraction for the pages where the raw responses are already extracted
 
-4) **Aggregate & Persist**  
+3) **Aggregate & Persist**  
    - Merge page-level personas, general content, and metadata into:  
      - Merged personas bundle (`personas.json`)  
      - Per-persona files (`individual/{persona_id}.json`)  
      - QA report and structured per-page dump
 
-5) **Reasoning**  
+4) **Reasoning**  
    - Collect salient statements and run a text model to derive persona traits (style/value/guardrails).  
    - Chunk inputs if large; reuse cached results when present.  
    - Write per-persona reasoning artifacts to `common_traits/{persona_id}.json`.
@@ -29,7 +26,7 @@ High-level overview of how a PDF becomes persona data and derived reasoning arti
 - `statements`: individual insights within an indicator; each carries metrics, salience, and influences.
 - `metrics`: normalized numeric/text measures with units (`index`, `%`, `count`, `rank`, `€`, `other`) plus optional description/context.
 - `salience`: marks whether a statement is visually emphasized (`is_salient`) with direction (`high|low|neutral`) and magnitude (`strong|medium|weak`), and a short rationale.
-- `influences`: flags whether a statement shapes tone or stance.
+- `influences`: flags whether a statement shapes tone or stance of the persona.
 - `sources`: document/page references for traceability.
 
 Example indicator shape (with field meanings):
@@ -81,7 +78,7 @@ Indicator {
 
 ### Traits (reasoning output)
 - `style_profile`: how the persona would speak (tone adjectives, formality, directness, emotional flavour, criticality, verbosity, preferred structures, example phrases).
-- `value_frame`: what they prioritize (priority_rank plus sustainability, price sensitivity, novelty seeking, brand loyalty, health concern, and a summary description).
+- `value_frame`: what they prioritize as core values (priority_rank plus sustainability, price sensitivity, novelty seeking, brand loyalty, health concern, and a summary description).
 - `reasoning_policies`:
   - `purchase_advice`: default biases and tradeoff rules to apply when recommending.
   - `product_evaluation`: what earns praise, what triggers criticism, and must-always-check items.

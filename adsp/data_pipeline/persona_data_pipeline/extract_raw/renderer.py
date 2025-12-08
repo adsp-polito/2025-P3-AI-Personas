@@ -1,4 +1,4 @@
-"""PDF rendering utilities."""
+"""PDF rendering utilities. Convert PDF pages into images"""
 
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ class PDFRenderer:
         page_range: Optional[tuple[int, int]] = None,
         reuse_existing_images: bool = True,
     ) -> List[PageImage]:
+        """
+        It tries to use the PyMuPDF library (fitz) first because it's generally faster. If PyMuPDF
+        is not installed, it falls back to using pdf2image
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
         try:
             import fitz  # type: ignore
