@@ -21,7 +21,7 @@ class VLLMOpenAIExtractor:
             from openai import OpenAI  # type: ignore
         except ImportError as exc:  # pragma: no cover - import guard
             raise ImportError(
-                "openai client is required for persona extraction. "
+                "openai client is required for fact data extraction. "
                 "Install with `pip install openai`."
             ) from exc
 
