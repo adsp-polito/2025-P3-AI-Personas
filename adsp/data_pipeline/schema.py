@@ -14,6 +14,7 @@ class Source(BaseModel):
     pages: List[int] = Field(default_factory=list)
 
     class Config:
+        # this is to allow to store additional fields that are not defined in the model
         extra = "allow"
 
 
