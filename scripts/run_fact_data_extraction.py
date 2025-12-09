@@ -212,7 +212,7 @@ def main(raw_args: Optional[list[str]] = None) -> None:
     logger.info("Fact data extraction pipeline finished.")
     print(result)
     fact_data = result.get("pages", [])
-    page_numbers = [p.get("page_number") for p in fact_data if isinstance(p, PageImage)]
+    page_numbers = [p.page_number for p in fact_data if isinstance(p, PageImage)]
     logger.info(f"Fact Data extracted: {page_numbers}")
     summary = {
         "page_numbers": page_numbers,

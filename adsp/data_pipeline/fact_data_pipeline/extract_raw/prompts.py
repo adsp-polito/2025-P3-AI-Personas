@@ -100,6 +100,7 @@ Core Instructions:
     *	Trends
     *	Outliers
     *	Any annotation
+  For donut plots, you know that colours are matched to categories and labels in the legend, so extract accordingly. You know that usually in a donut or pie chart, if you start clockwise you continue clockwise, same for anti-clockwise, do not skip pieces of donut or pie chart.
 
 7. ALWAYS OUTPUT VALID JSON
   If an element is missing on a page, simply omit it—do not hallucinate.
@@ -112,6 +113,16 @@ Core Instructions:
   Preserve:
 	  *	€, %, °C, etc.
 	  *	Subscripts, superscripts if visible
+
+10. Donut and Pie Charts
+  For donut and pie charts:
+	  *	Extract all slices with no skipping and no reordering.
+    *	Before extraction, determine a single traversal direction (clockwise or counterclockwise) and follow it consistently for every slice.
+    *	For each slice, match its exact color to the corresponding colored box in the legend—color matching always overrides text placement inside the slice.
+    *	Internal slice text may help confirm values, but legend + color determines the category and ordering.
+    *	If a slice is small, partially hidden, or lacks text, still extract it and match it by color.
+    *	Ensure the number of slices = number of unique legend colors, and validate that every slice has a matching legend entry.
+    *	The JSON must list slices in traversal order with fields: "color", "legend_label", "value".
 
 Output JSON Schema:
 

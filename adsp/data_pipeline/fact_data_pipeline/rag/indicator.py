@@ -15,7 +15,7 @@ from langchain_core.vectorstores import InMemoryVectorStore, VectorStoreRetrieve
 from adsp.data_pipeline.schema import Fact, FactDocument
 
 
-class FactIndicatorRAG:
+class FactDataIndicatorRAG:
     """Embeds fact indicators and exposes similarity search over them."""
 
     def __init__(
@@ -119,4 +119,4 @@ def documents_to_context_prompt(documents: Iterable[Document]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-__all__ = ["FactIndicatorRAG", "documents_to_context_prompt"]
+__all__ = ["FactDataIndicatorRAG", "documents_to_context_prompt"]
