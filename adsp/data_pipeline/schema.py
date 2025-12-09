@@ -157,6 +157,33 @@ class PersonaProfileModel(BaseModel):
     class Config:
         extra = "allow"
 
+class Fact(BaseModel):
+    id: Optional[str] = None
+    type: Optional[str] = None
+    text: Optional[str] = None
+    structured_content: Optional[dict] = Field(default_factory=dict)
+
+    class Config:
+        extra = "allow"
+
+
+class FactPage(BaseModel):
+    page_number: int
+    elements: List[Fact] = Field(default_factory=list)
+
+    class Config:
+        extra = "allow"
+
+
+class FactDocument(BaseModel):
+    document_id: str
+    pages: List[FactPage] = Field(default_factory=list)
+
+    class Config:
+        extra = "allow"
+
+
+FactElement = Fact
 
 PersonaProfile = PersonaProfileModel
 
@@ -171,4 +198,23 @@ def load_persona_profile(path: Union[str, Path]) -> PersonaProfileModel:
     return PersonaProfileModel(**payload)
 
 
-__all__ = ["PersonaProfile", "PersonaProfileModel", "load_persona_profile"]
+def load_fact_document(path: Union[str, Path]) -> FactDocument:
+    """Read a fact document JSON file into a FactDocument instance."""
+    json_path = Path(path)
+    if not json_path.is_file():
+        raise FileNotFoundError(f"Fact document file not found: {json_path}")
+
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    return FactDocument(**payload)
+
+
+__all__ = [
+    "PersonaProfile",
+    "PersonaProfileModel",
+    "load_persona_profile",
+    "Fact",
+    "FactElement",
+    "FactPage",
+    "FactDocument",
+    "load_fact_document",
+]
