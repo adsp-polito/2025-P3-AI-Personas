@@ -148,51 +148,52 @@ The persistence foundation of the system, designed for scalability, durability, 
 ###### 1.1 Orchestrator Analysis
 - The Orchestrator analyzes the query and attachments to decide which services should be used.
 
-##### 2. Input Preprocessing
+##### 2. Memory Integration
+- Extract useful information from **chat history**.
+
+##### 3. Input Preprocessing
 - Inputs are preprocessed before passing to the model.
 
-###### 2.1 Text Input
+###### 3.1 Text Input
 - Normalize text to make it easier to handle in later steps.
 
-###### 2.2 PDF Input
+###### 3.2 PDF Input
 - Parse, process, and extract meaningful information from PDF files.
 
-###### 2.3 Image Input
+###### 3.3 Image Input
 - Process images and extract valuable information.
 
-##### 3. Context Retrieval (RAG System)
+##### 4. Context Retrieval (RAG System)
 - Use the query and relevant input information to retrieve context (e.g., market data) via a **RAG system**.
 
-##### 4. Tool Selection & MCP Server Requests
+##### 5. Tool Selection & MCP Server Requests
 - Decide which tools should be used to enrich the context.
 - Send requests to the **MCP server** to gather corresponding context.
 
-###### 4.1 Web Search
+###### 5.1 Web Search
 - Extract updated information from the internet (trends, real-time data, missing internal data, etc.).
 
-###### 4.2 Database Query
+###### 5.2 Database Query
 - Retrieve useful data from internal or external databases.
 
-###### 4.3 External APIs
+###### 5.3 External APIs
 - Call APIs to obtain additional information.
 
-###### 4.4 Other Tools
+###### 5.4 Other Tools
 - Use calculators, simulators, weather data extractors, or other utilities to enrich context.
 
-##### 5. Explanation
+##### 6. Explanation
 - The explanation module will explain in detail the thought process of the reasoning model and the data used for the thinking process.
 
-##### 6. Prompt Construction
+##### 7. Prompt Construction
 - The Orchestrator aggregates useful context and passes it to **Prompt Construction**.
 
-##### 7. Persona Selection
+##### 8. Persona Selection
 - Apply the selected Persona profile, including:
   - Demographics  
   - Behavior Data  
   - Transactional Data
 
-##### 8. Memory Integration
-- Extract useful information from **chat history**.
 
 ##### 9. Persona Model Routing
 - Route to a fine-tuned Persona model.
