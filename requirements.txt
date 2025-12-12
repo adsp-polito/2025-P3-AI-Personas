@@ -21,4 +21,6 @@ ruff
 scikit-learn
 tqdm
 typer
+fastapi
+uvicorn[standard]
 -e .

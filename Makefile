@@ -131,6 +131,23 @@ export: requirements
 	@echo "✅ Notebooks exported successfully."
 	@echo ""
 
+## Run the local chat CLI (end-to-end demo)
+.PHONY: chat
+chat: requirements
+	@echo ""
+	@echo "💬 Starting local chat CLI..."
+	@echo ""
+	$(PYTHON) scripts/run_chat.py chat
+
+## Run the REST API server (FastAPI + Swagger)
+.PHONY: api
+api: requirements
+	@echo ""
+	@echo "🛰️  Starting REST API server..."
+	@echo "🧭 Swagger UI: http://localhost:8000/docs"
+	@echo ""
+	$(PYTHON) scripts/run_api.py
+
 #################################################################################
 # Self Documenting Commands                                                     #
 #################################################################################
