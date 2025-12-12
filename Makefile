@@ -7,6 +7,7 @@ PYTHON_VERSION := 3.10
 PYTHON_INTERPRETER := python3
 VENV_DIR := .venv
 
+# detect operating system, assign variables
 ifeq ($(OS),Windows_NT)
     ACTIVATE := $(VENV_DIR)\Scripts\activate.bat
     PYTHON := $(VENV_DIR)\Scripts\python.exe
@@ -15,7 +16,7 @@ else
     PYTHON := $(VENV_DIR)/bin/python
 endif
 
-# Check if venv exists and use it, otherwise fallback to system Python
+# Check if venv exists (if it exists it will output echo) and use it, otherwise fallback to system Python
 ifeq ($(shell test -d $(VENV_DIR) && echo 1),1)
     # If the venv exists, use its Python interpreter
     PYTHON := $(VENV_DIR)/bin/python

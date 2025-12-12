@@ -105,6 +105,10 @@ class PersonaReasoner:
         return payload
 
     def _collect_key_indicators(self, persona: Dict[str, Any]) -> List[dict]:
+        """
+        This method filters through all of a persona's indicators and statements to find only the "salient" ones (where
+        salience.is_salient is true). These key indicators are the evidence fed to the reasoning model
+        """
         indicators: List[dict] = []
         for indicator in persona.get("indicators") or []:
             if not isinstance(indicator, dict):
@@ -132,6 +136,10 @@ class PersonaReasoner:
         return indicators
 
     def _build_profile(self, persona: Dict[str, Any], key_indicators: List[dict]) -> Dict[str, Any]:
+        """
+        Orchestrates the reasoning call. It formats the ALIGNMENT_USER_TEMPLATE with the key indicators and calls the LLM via
+        the _invoke method. It also handles chunking the indicators if they are too large to fit in a single prompt
+        """
         if not key_indicators:
             logger.info(f"No salient indicators for persona {persona.get('persona_id')}; skipping reasoning.")
             return {}
@@ -213,6 +221,9 @@ class PersonaReasoner:
         return batches
 
     def _merge_profiles(self, base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        A specialized deep-merge function to combine reasoning results if the indicators were processed in multiple chunks
+        """
         if not base:
             return incoming or {}
         result = json.loads(json.dumps(base))  # deep copy

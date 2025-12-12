@@ -29,6 +29,15 @@ class PersonaExtractionPipeline:
         self._chain: RunnableSequence = self._build_chain()
 
     def _build_chain(self) -> RunnableSerializable[Any, Any]:
+        """
+        This is the core of the orchestration. It uses LangChain's Runnable protocol to define the pipeline as a chain of
+        functions. The | (pipe) operator passes the output of one step as the input to the next. The steps are:
+        1. _render_pages: Render PDF to images
+        2. _prepare_extraction_plan: Check cache and determine which pages to extract
+        3. _extract_and_collect: Call the VLLM for the necessary pages
+        4. _merge_and_write: Merge all results and write them to disk
+        5. _run_reasoner: Run the final reasoning step to enrich the profiles
+        """
         return (
             RunnableLambda(self._render_pages).with_config(run_name="RenderPages")
             | RunnableLambda(self._prepare_extraction_plan).with_config(run_name="PrepareExtractionPlan")

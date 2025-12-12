@@ -8,7 +8,9 @@ from typing import Dict
 
 @dataclass
 class AuthService:
-    """Very small in-memory auth registry for illustration purposes."""
+    """Very small in-memory auth registry for illustration purposes.
+    It has to manage authentication and authorization, user access, permissions, and ensure only authorized users can interact
+    with certain parts of the system"""
 
     _tokens: Dict[str, str] = field(default_factory=dict)
 

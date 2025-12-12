@@ -48,12 +48,20 @@ class VLLMOpenAIExtractor:
         all_pages: Optional[Sequence[PageImage]] = None,
         context_window: Optional[int] = None,
     ) -> List[PageExtractionResult]:
+        """
+        It orchestrates the extraction for a sequence of pages.
+        """
         if not pages:
             return []
         all_pages = all_pages or pages
         window = self.context_window if context_window is None else max(0, context_window)
         page_lookup = {p.page_number: p for p in all_pages}
         results: List[PageExtractionResult] = []
+        """
+        It uses a ThreadPoolExecutor to send requests to the VLLM concurrently, up to the max_concurrent_requests limit
+        specified in the config. This significantly speeds up the process when there are many pages to extract. It calls
+        _extract_single_page for each page
+        """
         with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
             future_map = {
                 executor.submit(
@@ -78,6 +86,7 @@ class VLLMOpenAIExtractor:
     def _extract_single_page(
         self, page: PageImage, context_pages: Sequence[PageImage]
     ) -> PageExtractionResult:
+        """It handles extraction for a single page"""
         last_error: Optional[str] = None
         raw_text = ""
         total_attempts = max(1, self.max_retries + 1)
@@ -130,6 +139,11 @@ class VLLMOpenAIExtractor:
 
     @staticmethod
     def _parse_raw_response(raw_text: str) -> Optional[Any]:
+        """
+        This static method attempts to parse the model's raw text response. It uses the strip_json_markdown utility and tries
+        multiple strategies to find a valid JSON object or list within the string, making the parsing robust against common LLM output
+        inconsistencies
+        """
         cleaned = strip_json_markdown(raw_text)
         candidates = [cleaned]
 
@@ -155,6 +169,10 @@ class VLLMOpenAIExtractor:
     def _build_context_pages(
         page: PageImage, page_lookup: dict[int, PageImage], window: int
     ) -> List[PageImage]:
+        """
+        This method constructs the complex payload for the "user" message in the API call. It combines a text preface with
+        multiple image URLs (the primary page and its context pages), all encoded in base64.
+        """
         if window <= 0:
             return [page]
         neighbors = [page.page_number]

@@ -19,6 +19,7 @@ class PromptBuilder:
 
     def build(self, persona_id: str, query: str, context: str, history: list[dict] | None = None) -> str:
         persona = self.registry.get(persona_id)
+        # get system prompt from persona
         system_prompt = self._system_prompt_for_persona(persona)
         history_block = self._history_block(history)
         if history_block:
@@ -63,6 +64,7 @@ class PromptBuilder:
                     return persona_to_system_prompt(profile)
                 except ValidationError:
                     pass
+            # get value of preamble, otherwise use the default value
             return persona.get("preamble", "You are an AI persona.")
 
         return "You are an AI persona."

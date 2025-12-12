@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Iterable, List, Tuple
 
+# a fundamental data structure in LangChain to represent a piece of text content along with its metadata
 from langchain_core.documents import Document
+# an abstract base class for embedding models
 from langchain_core.embeddings import Embeddings
+# import a basic, in-memory vector database implementation provided by LangChain, and an interface for retrieving
+# Documents from a vector store based on query
 from langchain_core.vectorstores import InMemoryVectorStore, VectorStoreRetriever
 
 from adsp.data_pipeline.schema import Indicator, PersonaProfileModel, Statement
@@ -24,10 +28,13 @@ class PersonaIndicatorRAG:
         self.vectorstore = vectorstore or InMemoryVectorStore(embedding=embeddings)
 
     def index_persona(self, persona: PersonaProfileModel) -> List[str]:
-        """Add a persona's indicators to the vector store."""
+        """Add a persona's indicators to the vector store, so index all indicators of the given persona"""
+        # for each indicator of the persona generate text content and associated metadata
         texts, metadatas = self._indicator_payloads(persona)
         if not texts:
             return []
+        # add_texts method of the vectorstore is used to embed the generated texts and store them along with their metadatas. This is where
+        # the embedding model (provided in __init__) is used
         return self.vectorstore.add_texts(texts=texts, metadatas=metadatas)
 
     def index_personas(self, personas: Iterable[PersonaProfileModel]) -> List[str]:
@@ -46,10 +53,12 @@ class PersonaIndicatorRAG:
         return self.vectorstore.as_retriever(search_kwargs={"k": k})
 
     def _indicator_payloads(self, persona: PersonaProfileModel) -> Tuple[List[str], List[dict]]:
+        """Helper method to prepare data for indexing. It will return a tuple of two lists: texts (the content to embed) and metadatas (associated dictionaries)"""
         texts: List[str] = []
         metadatas: List[dict] = []
 
         for indicator in persona.indicators:
+            # convert the structured Indicator object into a readable text string. If the rendering results is an empty string, it skips this indicator
             text = self._render_indicator(persona, indicator)
             if not text:
                 continue
