@@ -54,6 +54,15 @@ class PersonaIndicatorRAG:
             if not text:
                 continue
 
+            sources_payload = []
+            for source in indicator.sources or []:
+                sources_payload.append(
+                    {
+                        "doc_id": source.doc_id,
+                        "pages": list(source.pages or []),
+                    }
+                )
+
             texts.append(text)
             metadatas.append(
                 {
@@ -63,6 +72,7 @@ class PersonaIndicatorRAG:
                     "indicator_label": indicator.label,
                     "domain": indicator.domain,
                     "category": indicator.category,
+                    "sources": sources_payload,
                 }
             )
 
@@ -158,6 +168,18 @@ def documents_to_context_prompt(documents: Iterable[Document]) -> str:
             header_parts.append(f"Domain: {meta['domain']}")
         if meta.get("category"):
             header_parts.append(f"Category: {meta['category']}")
+
+        sources = meta.get("sources")
+        if isinstance(sources, list) and sources:
+            first = sources[0]
+            if isinstance(first, dict):
+                doc_id = first.get("doc_id")
+                pages = first.get("pages")
+                if isinstance(doc_id, str) and doc_id:
+                    if isinstance(pages, list) and pages:
+                        header_parts.append(f"Source: {doc_id} pages={pages}")
+                    else:
+                        header_parts.append(f"Source: {doc_id}")
 
         header = " | ".join(header_parts)
         body = doc.page_content.strip()

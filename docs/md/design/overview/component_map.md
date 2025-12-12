@@ -9,7 +9,7 @@ This document maps the system architecture in `docs/md/design.md` to the current
 | Architecture layer | Primary code location | Primary components (code) | Design docs |
 |---|---|---|---|
 | UI / Frontend | `adsp/fe/` | `ChatFrontend` | `docs/md/design/frontend/chat_frontend.md` |
-| Application layer | `adsp/app/` | `AuthService`, `QAService`, `IngestionService`, `ReportService`, `PersonaConfigurationService` | `docs/md/design/application/` |
+| Application layer | `adsp/app/` | `AuthService`, `QAService`, `IngestionService`, `ReportService`, `PersonaConfigurationService`, REST API (`api_server.py`) | `docs/md/design/application/` |
 | Communication layer | `adsp/communication/` | `RPCClient`, `CacheClient`, `EventBroker` | `docs/md/design/communication/` |
 | Core layer | `adsp/core/` | `Orchestrator`, `InputHandler`, `PromptBuilder`, `PersonaRegistry`, `PersonaRouter`, `RAGPipeline`, `ConversationMemory`, `MCPServer` | `docs/md/design/core/` |
 | Data pipeline (background) | `adsp/data_pipeline/` | persona extraction + schema + RAG indexing | `docs/md/design/data_pipeline/` |
@@ -30,4 +30,3 @@ This document maps the system architecture in `docs/md/design.md` to the current
    - caches response (`CacheClient.set`)
 
 See: `docs/md/design/integration/end_to_end_flow.md`
-
