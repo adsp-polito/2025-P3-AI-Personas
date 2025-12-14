@@ -8,7 +8,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from adsp.core.persona_registry import PersonaRegistry
-from adsp.core.prompt_builder.system_prompt import persona_to_system_prompt
+from adsp.core.prompt_builder.system_prompt import (
+    persona_to_system_prompt,
+    preamble_to_system_prompt,
+)
 from adsp.data_pipeline.schema import PersonaProfileModel
 
 
@@ -23,14 +26,29 @@ class PromptBuilder:
         system_prompt = self._system_prompt_for_persona(persona)
         history_block = self._history_block(history)
         if history_block:
-            return f"{system_prompt}\n\n{history_block}\n\nContext:\n{context}\n\nQuestion:\n{query}"
-        return f"{system_prompt}\n\nContext:\n{context}\n\nQuestion:\n{query}"
+            return f"""
+SYSTEM PROMPT:\n{system_prompt}
+------------
+HISTORY:\n\n{history_block}
+------------
+CONTEXT:\n\n{context}
+-------------
+\n\nQUESTION:\n{query}
+"""
+
+        return f"""
+SYSTEM PROMPT:\n{system_prompt}
+------------
+CONTEXT:\n\n{context}
+-------------
+\n\nQUESTION:\n{query}
+"""
 
     @staticmethod
     def _history_block(history: list[dict] | None) -> str:
         if not history:
             return ""
-        lines = ["Conversation history (most recent last):"]
+        lines = ["Conversation history (reference only; most recent last):"]
         for item in history[-10:]:
             if not isinstance(item, dict):
                 continue
@@ -65,9 +83,9 @@ class PromptBuilder:
                 except ValidationError:
                     pass
             # get value of preamble, otherwise use the default value
-            return persona.get("preamble", "You are an AI persona.")
+            return preamble_to_system_prompt(persona.get("preamble"))
 
-        return "You are an AI persona."
+        return preamble_to_system_prompt(None)
 
 
 __all__ = ["PromptBuilder", "persona_to_system_prompt"]

@@ -31,19 +31,23 @@ The Orchestrator is the Core layer’s coordinator. It turns a user query into a
 ## Internal logic (current)
 
 1. **Cache lookup**
-   - `cache_key = f"{persona_id}:{query}"`
+   - `cache_key = f"{persona_id}:{session_id}:{query}"`
    - Return cached value if present (`CacheClient.get`)
 2. **Normalize**
    - `normalized = InputHandler.normalize(query)`
 3. **Retrieve context**
-   - `context = RAGPipeline.retrieve(persona_id=persona_id, query=normalized)`
-4. **Build prompt**
-   - `prompt = PromptBuilder.build(persona_id=persona_id, query=normalized, context=context)`
-5. **Dispatch to persona model**
+   - `retrieved = RAGPipeline.retrieve_with_metadata(persona_id=persona_id, query=normalized, k=top_k)`
+4. **Filter for relevance**
+   - Filter conversation history and retrieved context down to what is relevant for the current question
+   - `filtered_history = ConversationContextFilter.filter_history(history, normalized)`
+   - `filtered_retrieved = ConversationContextFilter.filter_retrieved(retrieved, normalized)`
+5. **Build prompt**
+   - `prompt = PromptBuilder.build(persona_id=persona_id, query=normalized, context=filtered_retrieved.context, history=filtered_history)`
+6. **Dispatch to persona model**
    - `response = PersonaRouter.dispatch(persona_id=persona_id, prompt=prompt)`
-6. **Persist memory**
+7. **Persist memory**
    - `ConversationMemory.store(persona_id=persona_id, message={"query": query, "response": response})`
-7. **Cache write**
+8. **Cache write**
    - `CacheClient.set(cache_key, response)`
 
 ## Inputs/outputs and extension points
@@ -58,6 +62,7 @@ The architecture (`docs/md/design.md`) calls for multimodal inputs (PDF/image). 
 - Python `dataclasses`
 - Core subcomponents:
   - `adsp/core/input_handler/__init__.py` (`InputHandler`)
+  - `adsp/core/context_filter.py` (`ConversationContextFilter`)
   - `adsp/core/rag/__init__.py` (`RAGPipeline`)
   - `adsp/core/prompt_builder/__init__.py` (`PromptBuilder`)
   - `adsp/core/ai_persona_router/__init__.py` (`PersonaRouter`)
@@ -79,3 +84,19 @@ Wire `MetricsCollector` to capture:
 - Unconfigured model backend in the inference engine (stub today)
 - Retrieval returns empty context (currently allowed; may degrade factuality)
 
+## Relevance filtering (config)
+
+Relevance filtering is enabled by default and can be configured via environment variables:
+
+- `ADSP_CONTEXT_FILTER_ENABLED`: `true`/`false` (default: `true`)
+- `ADSP_CONTEXT_FILTER_BACKEND`: `heuristic` (default) or `openai`
+- `ADSP_CONTEXT_FILTER_MAX_HISTORY`: max history turns to include (default: `4`)
+- `ADSP_CONTEXT_FILTER_MAX_BLOCKS`: max retrieved context blocks to include (default: `3`)
+- `ADSP_CONTEXT_FILTER_MIN_COVERAGE`: minimum token coverage threshold (default: `0.2`)
+- `ADSP_CONTEXT_FILTER_TIMEOUT`: LLM selection timeout in seconds (default: `20`)
+
+Optional OpenAI-compatible backend settings (when `ADSP_CONTEXT_FILTER_BACKEND=openai`):
+
+- `ADSP_CONTEXT_FILTER_BASE_URL` (defaults to `ADSP_LLM_BASE_URL` / `VLLM_BASE_URL`)
+- `ADSP_CONTEXT_FILTER_MODEL` (defaults to `ADSP_LLM_MODEL` / `VLLM_MODEL`)
+- `ADSP_CONTEXT_FILTER_API_KEY` (defaults to `ADSP_LLM_API_KEY` / `VLLM_API_KEY`)
