@@ -93,6 +93,7 @@ Relevance filtering is enabled by default and can be configured via environment 
 - `ADSP_CONTEXT_FILTER_MAX_HISTORY`: max history turns to include (default: `4`)
 - `ADSP_CONTEXT_FILTER_MAX_BLOCKS`: max retrieved context blocks to include (default: `3`)
 - `ADSP_CONTEXT_FILTER_MIN_COVERAGE`: minimum token coverage threshold (default: `0.2`)
+- `ADSP_CONTEXT_FILTER_TIMEOUT`: LLM selection timeout in seconds (default: `20`)
 
 Optional OpenAI-compatible backend settings (when `ADSP_CONTEXT_FILTER_BACKEND=openai`):
 

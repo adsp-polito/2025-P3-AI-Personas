@@ -179,8 +179,8 @@ class ConversationContextFilter:
     backend: str = field(
         default_factory=lambda: os.environ.get("ADSP_CONTEXT_FILTER_BACKEND", "heuristic")
     )
-    max_history_items: int = field(default_factory=lambda: _env_int("ADSP_CONTEXT_FILTER_MAX_HISTORY", 10))
-    max_context_blocks: int = field(default_factory=lambda: _env_int("ADSP_CONTEXT_FILTER_MAX_BLOCKS", 10))
+    max_history_items: int = field(default_factory=lambda: _env_int("ADSP_CONTEXT_FILTER_MAX_HISTORY", 4))
+    max_context_blocks: int = field(default_factory=lambda: _env_int("ADSP_CONTEXT_FILTER_MAX_BLOCKS", 3))
     min_coverage: float = field(default_factory=lambda: _env_float("ADSP_CONTEXT_FILTER_MIN_COVERAGE", 0.2))
 
     base_url: str = field(
@@ -201,7 +201,7 @@ class ConversationContextFilter:
             os.environ.get("ADSP_LLM_API_KEY", os.environ.get("VLLM_API_KEY", "EMPTY")),
         )
     )
-    timeout_s: float = field(default_factory=lambda: _env_float("ADSP_CONTEXT_FILTER_TIMEOUT", 30.0))
+    timeout_s: float = field(default_factory=lambda: _env_float("ADSP_CONTEXT_FILTER_TIMEOUT", 20.0))
     enabled: bool = field(default_factory=lambda: _env_flag("ADSP_CONTEXT_FILTER_ENABLED", True))
 
     def filter_history(self, history: List[dict] | None, query: str) -> List[dict]:
