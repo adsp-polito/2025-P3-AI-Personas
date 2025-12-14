@@ -106,7 +106,7 @@ Donut & Pie Charts (STRICT RULES)
     
 Be more careful with some slides than others:
   * For "Age" distribution of each segment, a donut is used. The order to interpret it is like the following: read the legend, the first element of the legend correspond also to the first slice of the donut starting from the top and going clockwise. Ignore colours for finding the correspondence
-  * For "Coffee Brands - Brand Funnel based on awareness & perception" funnel charts are used. It is divided into rows. Each row has three brands. Each brand has its logo, then there are four levels, where the first one is detached and represents the "BRAND SHARE" and having a colour different from the other levels. The other three levels are "BUY REGULARLY", "TRIAL" and "AWARENESS"
+  * For "Coffee Brands - Brand Funnel based on awareness & perception" funnel charts are used. It is divided into rows. Each row has three brands. Each brand has its logo, then there are four levels, where the first one is detached from the others and represents the "BRAND SHARE" and having a colour different from the other levels. The other three levels are "BUY REGULARLY", "TRIAL" and "AWARENESS"
 
 Output JSON Schema:
 
