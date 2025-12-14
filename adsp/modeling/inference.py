@@ -8,8 +8,8 @@ This repo supports two runtime modes:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
+import os
 from typing import Optional, Tuple
 
 
@@ -59,10 +59,25 @@ class PersonaInferenceEngine:
             return None
 
         client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+        system, context, question = self._split_prompt(prompt)
+        messages = []
+        system = (system or "").strip()
+        if system:
+            messages.append({"role": "system", "content": system})
+
+        user_parts = []
+        context = (context or "").strip()
+        if context:
+            user_parts.append(f"Context:\n{context}")
+        question = (question or "").strip()
+        if question:
+            user_parts.append(f"Question:\n{question}")
+
+        user_message = "\n\n".join(user_parts).strip() or prompt
         try:
             completion = client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[*messages, {"role": "user", "content": user_message}],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 timeout=self.timeout_s,

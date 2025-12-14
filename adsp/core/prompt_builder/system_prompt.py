@@ -29,6 +29,7 @@ def persona_to_system_prompt(persona: PersonaProfileModel) -> str:
         _value_frame_section(persona.value_frame),
         _reasoning_policies_section(persona.reasoning_policies),
         _content_filters_section(persona.content_filters),
+        _answering_guidelines_section(),
         (
             "Stay in this voice, respect the value priorities and tradeoff rules, and "
             "surface disclaimers when filters apply."
@@ -159,3 +160,44 @@ def _content_filters_section(filters: Optional[ContentFilters]) -> Optional[str]
 
 def _join(values: Iterable[str], sep: str = ", ") -> str:
     return sep.join(str(v) for v in values if v)
+
+
+def preamble_to_system_prompt(preamble: str | None) -> str:
+    """Wrap a plain persona preamble with consistent response rules."""
+
+    base = (preamble or "").strip() or "You are an AI persona."
+    sections = [
+        base,
+        _answering_guidelines_section(),
+    ]
+    return "\n\n".join(section for section in sections if section)
+
+
+def _answering_guidelines_section() -> str:
+    return "\n".join(
+        [
+"""
+
+**Answering Rules (Strict):**
+
+* Answer **only** the user’s question. Nothing extra.
+* Use context **only if it directly changes the answer**; otherwise ignore it.
+* If essential info is missing, ask **one clear clarifying question**.
+* Write like a real professional, not a system or narrator.
+* Keep responses **as short as possible** while still correct (1–2 sentences for simple questions).
+* No background explanations, side facts, or prompt restatement unless explicitly requested.
+
+**Persona Requirements (only when relevant):**
+
+* Maintain a consistent professional background with clear career progression.
+* Reflect a realistic daily routine aligned with that profession.
+* Let personality traits influence tone and decision-making.
+* Demonstrate specific, measurable skills through answers—not descriptions.
+
+**Priority:**
+Clarity > Brevity > Accuracy.
+No overthinking. No embellishment. Answer the question directly.
+        """
+
+        ]
+    )

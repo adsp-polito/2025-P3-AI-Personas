@@ -5,8 +5,8 @@ core package remains usable even when FastAPI/uvicorn are not installed.
 """
 
 import base64
-import os
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -17,7 +17,10 @@ from adsp.app.auth_service import AuthService
 from adsp.app.ingestion_service import IngestionService
 from adsp.app.qa_service import QAService
 from adsp.app.report_service import ReportService
-from adsp.core.prompt_builder.system_prompt import persona_to_system_prompt
+from adsp.core.prompt_builder.system_prompt import (
+    persona_to_system_prompt,
+    preamble_to_system_prompt,
+)
 from adsp.core.types import ChatRequest, ChatResponse
 from adsp.data_pipeline.schema import PersonaProfileModel
 
@@ -105,6 +108,7 @@ def create_app() -> Any:
 
     title = os.environ.get("ADSP_API_TITLE", "Lavazza AI Personas API")
     version = os.environ.get("ADSP_API_VERSION", "0.1.0")
+    debug = os.environ.get("ADSP_API_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
     description = (
         "REST API for the Lavazza AI Personas application layer.\n\n"
         "Swagger UI: `/docs`\n"
@@ -115,6 +119,7 @@ def create_app() -> Any:
         title=title,
         version=version,
         description=description,
+        debug=debug,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -202,7 +207,7 @@ def create_app() -> Any:
         if isinstance(persona, PersonaProfileModel):
             return SystemPromptResponse(system_prompt=persona_to_system_prompt(persona))
         if isinstance(persona, dict):
-            return SystemPromptResponse(system_prompt=str(persona.get("preamble", "You are an AI persona.")))
+            return SystemPromptResponse(system_prompt=preamble_to_system_prompt(persona.get("preamble")))
         raise HTTPException(status_code=404, detail="Persona not found")
 
     @app.post("/v1/chat", response_model=ChatResponseEnvelope, tags=["chat"], dependencies=[Depends(authorize)])
