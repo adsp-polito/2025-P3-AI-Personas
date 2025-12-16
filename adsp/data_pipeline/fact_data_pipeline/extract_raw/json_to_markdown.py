@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import yaml
 from loguru import logger
 
 
@@ -32,6 +33,22 @@ class JSONToMarkdownConverter:
         
         # Create output directory if it doesn't exist
         self.output_dir.mkdir(parents=True, exist_ok=True)
+    
+    @staticmethod
+    def _yaml_safe_string(value: Any) -> str:
+        """Convert a value to a YAML-safe string, quoting if necessary."""
+        if value is None:
+            return ""
+        str_value = str(value)
+        # Check if the string needs quoting (contains YAML special characters)
+        # Key characters: : (colon), # (comment), [ ] { } (collections), quotes, etc.
+        needs_quoting = any(char in str_value for char in [':', '#', '[', ']', '{', '}', '&', '*', '!', '|', '>', "'", '"', '%', '@', '`'])
+        
+        if needs_quoting:
+            # Escape any existing single quotes and wrap in single quotes
+            escaped = str_value.replace("'", "''")
+            return f"'{escaped}'"
+        return str_value
     
     def convert_element_to_markdown(self, element: Dict[str, Any]) -> str:
         """
@@ -327,13 +344,17 @@ class JSONToMarkdownConverter:
         markdown_parts.append(f"page: {page_number}\n")
         
         if page_metadata.get("section_title"):
-            markdown_parts.append(f"section: {page_metadata['section_title']}\n")
+            section = self._yaml_safe_string(page_metadata['section_title'])
+            markdown_parts.append(f"section: {section}\n")
         if page_metadata.get("subsection_title"):
-            markdown_parts.append(f"subsection: {page_metadata['subsection_title']}\n")
+            subsection = self._yaml_safe_string(page_metadata['subsection_title'])
+            markdown_parts.append(f"subsection: {subsection}\n")
         if page_metadata.get("template_type"):
-            markdown_parts.append(f"template: {page_metadata['template_type']}\n")
+            template = self._yaml_safe_string(page_metadata['template_type'])
+            markdown_parts.append(f"template: {template}\n")
         if segment.get("segment_name"):
-            markdown_parts.append(f"segment: {segment['segment_name']}\n")
+            segment_name = self._yaml_safe_string(segment['segment_name'])
+            markdown_parts.append(f"segment: {segment_name}\n")
         
         markdown_parts.append("---\n\n")
         
