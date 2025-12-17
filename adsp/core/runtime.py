@@ -14,6 +14,7 @@ from adsp.core.orchestrator import Orchestrator
 from adsp.core.persona_registry import PersonaRegistry
 from adsp.core.prompt_builder import PromptBuilder
 from adsp.core.rag import RAGPipeline
+from adsp.core.rag.fact_data_index import FactDataRAGIndex, build_fact_data_index_from_markdown
 from adsp.core.rag.persona_index import PersonaRAGIndex
 from adsp.data_pipeline.schema import PersonaProfileModel
 
@@ -91,6 +92,82 @@ def build_registry(personas: List[PersonaProfileModel]) -> PersonaRegistry:
     return registry
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_fact_data_index(*, processed_dir: Path = PROCESSED_DATA_DIR) -> Optional[FactDataRAGIndex]:
+    """Build the FactData RAG index at startup (optional)."""
+
+    if not _env_flag("ADSP_FACTDATA_RAG_ENABLED", True):
+        return None
+
+    try:
+        from adsp.data_pipeline.fact_data_pipeline.extract_raw.config import FactDataExtractionConfig
+    except Exception as exc:  # pragma: no cover - optional dependency guard
+        logger.debug(f"Fact data pipeline unavailable: {exc}")
+        return None
+
+    cfg = FactDataExtractionConfig()
+    cfg.fact_data_output_dir = processed_dir / "fact_data"
+
+    markdown_dir = Path(
+        os.environ.get(
+            "ADSP_FACTDATA_MARKDOWN_DIR",
+            str(cfg.fact_data_output_dir / "pages"),
+        )
+    )
+    markdown_pattern = os.environ.get("ADSP_FACTDATA_MARKDOWN_PATTERN", "page_*.md")
+
+    index = build_fact_data_index_from_markdown(markdown_dir, pattern=markdown_pattern)
+    if index is not None:
+        logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
+        return index
+
+    json_dir = Path(os.environ.get("ADSP_FACTDATA_JSON_DIR", str(cfg.raw_responses_dir)))
+    if json_dir.exists() and any(json_dir.glob("page_*.json")):
+        try:
+            from adsp.data_pipeline.fact_data_pipeline.extract_raw import run_json_to_markdown_conversion
+
+            converted = run_json_to_markdown_conversion(json_dir, markdown_dir)
+            logger.info(f"Converted {converted} fact data JSON pages -> markdown for indexing")
+        except Exception as exc:  # pragma: no cover - best effort conversion
+            logger.warning(f"Fact data JSON->markdown conversion failed: {exc}")
+
+        index = build_fact_data_index_from_markdown(markdown_dir, pattern=markdown_pattern)
+        if index is not None:
+            logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
+            return index
+
+    if not _env_flag("ADSP_FACTDATA_RUN_EXTRACTION", False):
+        return None
+
+    if not cfg.vllm_model:
+        logger.warning("Fact data extraction requested but no model configured; set `VLLM_MODEL`.")
+        return None
+
+    try:
+        from adsp.data_pipeline.fact_data_pipeline.extract_raw import (
+            run_fact_data_extraction_pipeline,
+            run_json_to_markdown_conversion,
+        )
+
+        run_fact_data_extraction_pipeline(cfg)
+        converted = run_json_to_markdown_conversion(cfg.raw_responses_dir, markdown_dir)
+        logger.info(f"Converted {converted} extracted fact data pages -> markdown")
+    except Exception as exc:  # pragma: no cover - external pipeline
+        logger.warning(f"Fact data extraction pipeline failed: {exc}")
+        return None
+
+    index = build_fact_data_index_from_markdown(markdown_dir, pattern=markdown_pattern)
+    if index is not None:
+        logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
+    return index
+
+
 def build_default_orchestrator(
     *,
     processed_dir: Path = PROCESSED_DATA_DIR,
@@ -112,13 +189,19 @@ def build_default_orchestrator(
     persona_index.index_personas(personas)
     retriever = RAGPipeline(persona_index=persona_index)
 
-    return Orchestrator(prompt_builder=prompt_builder, retriever=retriever)
+    fact_data_index = build_fact_data_index(processed_dir=processed_dir)
+
+    return Orchestrator(
+        prompt_builder=prompt_builder,
+        retriever=retriever,
+        fact_data_index=fact_data_index,
+    )
 
 
 __all__ = [
     "resolve_persona_paths",
     "load_personas_from_disk",
     "build_registry",
+    "build_fact_data_index",
     "build_default_orchestrator",
 ]
-
