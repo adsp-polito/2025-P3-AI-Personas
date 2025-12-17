@@ -52,10 +52,9 @@ def main():
         help="Number of results to return for test query (default: 10)",
     )
     parser.add_argument(
-        "--test-query",
-        type=bool,
-        default=True,
-        help="Whether to run test queries after indexing (default: True)"
+        "--skip-test-query",
+        action="store_true",
+        help="Skip running test queries after indexing (queries run by default)"
     )
     
     args = parser.parse_args()
@@ -86,7 +85,7 @@ def main():
         traceback.print_exc()
         return 1
     
-    if args.test_query:
+    if not args.skip_test_query:
         queries = [
             "What are the demographics of Curious Connoisseurs?",
             "What coffee brands do they prefer?",
