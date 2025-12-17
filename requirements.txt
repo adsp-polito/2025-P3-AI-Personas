@@ -29,4 +29,5 @@ dill
 shapely
 pyclipper
 omegaconf
+langchain-text-splitters
 -e .

@@ -1,8 +1,9 @@
-"""Persona indicator embedding and retrieval using LangChain primitives."""
+"""Fact data embedding and retrieval using LangChain primitives."""
 
 from __future__ import annotations
 
-from typing import Iterable, List, Tuple
+from pathlib import Path
+from typing import Iterable, List
 
 # a fundamental data structure in LangChain to represent a piece of text content along with its metadata
 from langchain_core.documents import Document
@@ -11,8 +12,9 @@ from langchain_core.embeddings import Embeddings
 # import a basic, in-memory vector database implementation provided by LangChain, and an interface for retrieving
 # Documents from a vector store based on query
 from langchain_core.vectorstores import InMemoryVectorStore, VectorStoreRetriever
+from loguru import logger
 
-from adsp.data_pipeline.schema import Fact, FactDocument
+from .chunker import FactDataMarkdownChunker
 
 
 class FactDataIndicatorRAG:
@@ -23,74 +25,46 @@ class FactDataIndicatorRAG:
         embeddings: Embeddings,
         *,
         vectorstore: InMemoryVectorStore | None = None,
+        chunk_size: int = 1200,
+        chunk_overlap: int = 50,
     ) -> None:
         self.embeddings = embeddings
         self.vectorstore = vectorstore or InMemoryVectorStore(embedding=embeddings)
+        self.chunker = FactDataMarkdownChunker(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
 
-    def index_fact_document(self, fact_document: FactDocument) -> List[str]:
-        """Add a document's facts to the vector store."""
-        texts, metadatas = self._fact_payloads(fact_document)
-        if not texts:
-            return []
-        return self.vectorstore.add_texts(texts=texts, metadatas=metadatas)
-
-    def index_fact_documents(self, fact_documents: Iterable[FactDocument]) -> List[str]:
-        """Batch index multiple fact documents."""
-        ids: List[str] = []
-        for doc in fact_documents:
-            ids.extend(self.index_fact_document(doc))
-        return ids
-
-    def search(self, query: str, *, k: int = 5) -> List[Document]:
+    def search(self, query: str, *, k: int = 10) -> List[Document]:
         """Similarity search against indexed facts."""
         return self.vectorstore.similarity_search(query, k=k)
 
-    def as_retriever(self, *, k: int = 5) -> VectorStoreRetriever:
+    def as_retriever(self, *, k: int = 10) -> VectorStoreRetriever:
         """Expose a LangChain retriever with a fixed top-k."""
         return self.vectorstore.as_retriever(search_kwargs={"k": k})
 
-    def _fact_payloads(self, fact_document: FactDocument) -> Tuple[List[str], List[dict]]:
-        """Helper method to prepare data for indexing."""
-        texts: List[str] = []
-        metadatas: List[dict] = []
-
-        for page in fact_document.pages:
-            for fact in page.elements:
-                text = self._render_fact(fact, page.page_number)
-                if not text:
-                    continue
-
-                texts.append(text)
-                metadatas.append(
-                    {
-                        "document_id": fact_document.document_id,
-                        "page_number": page.page_number,
-                        "element_id": fact.id,
-                        "element_type": fact.type,
-                    }
-                )
-
-        return texts, metadatas
-
-    def _render_fact(self, fact: Fact, page_number: int) -> str:
-        """Render a fact into a string for embedding."""
-        parts: List[str] = []
-
-        if fact.type:
-            parts.append(f"Type: {fact.type}")
+    def index_markdown_file(self, file_path: Path) -> List[str]:
+        """Index a single markdown file by chunking and adding to vector store."""
+        chunks = self.chunker.chunk_markdown_file(file_path)
+        if not chunks:
+            return []
         
-        parts.append(f"Page: {page_number}")
-
-        if fact.text:
-            parts.append(fact.text)
-
-        if fact.structured_content:
-            # Basic rendering of structured content. This could be more sophisticated.
-            import json
-            parts.append("Structured Content:")
-            parts.append(json.dumps(fact.structured_content, indent=2))
-
-        return "\n".join(parts).strip()
+        return self.vectorstore.add_documents(chunks)
+    
+    def index_markdown_directory(
+        self,
+        directory: Path,
+        pattern: str = "page_*.md",
+    ) -> List[str]:
+        """Index all markdown files in a directory."""
+        chunks = self.chunker.chunk_directory(directory, pattern)
+        
+        if not chunks:
+            logger.warning(f"No chunks created from {directory}")
+            return []
+        
+        logger.info(f"Indexing {len(chunks)} chunks into vector store")
+        return self.vectorstore.add_documents(chunks)
 
 
 def documents_to_context_prompt(documents: Iterable[Document]) -> str:
@@ -100,14 +74,18 @@ def documents_to_context_prompt(documents: Iterable[Document]) -> str:
         meta = doc.metadata or {}
         header_parts = []
 
-        if meta.get("document_id"):
-            header_parts.append(f"Document: {meta['document_id']}")
-        if meta.get("page_number"):
-            header_parts.append(f"Page: {meta['page_number']}")
-        if meta.get("element_type"):
-            header_parts.append(f"Type: {meta['element_type']}")
-        if meta.get("element_id"):
-            header_parts.append(f"ID: {meta['element_id']}")
+        # Prioritize segment information
+        if meta.get("segment"):
+            header_parts.append(f"Segment: {meta['segment']}")
+        if meta.get("section"):
+            header_parts.append(f"Section: {meta['section']}")
+        if meta.get("template"):
+            header_parts.append(f"Template: {meta['template']}")
+        if meta.get("page_number") or meta.get("page"):
+            page = meta.get("page_number") or meta.get("page")
+            header_parts.append(f"Page: {page}")
+        if meta.get("source_file"):
+            header_parts.append(f"Source: {meta['source_file']}")
         
         header = " | ".join(header_parts)
         body = doc.page_content.strip()
