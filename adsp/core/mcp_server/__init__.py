@@ -13,7 +13,7 @@ class MCPServer:
     """Coordinates MCP tool calls and caches their responses for reuse."""
 
     # mcp: MCPClient = MCPClient()
-    mcp: MCPClient = field(default_factory=MCPClient())
+    mcp: MCPClient = field(default_factory=MCPClient)
     _cache: Dict[str, dict] = None
 
     def __post_init__(self) -> None:

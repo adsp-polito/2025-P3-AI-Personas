@@ -30,4 +30,6 @@ shapely
 pyclipper
 omegaconf
 langchain-text-splitters
+fastapi
+uvicorn[standard]
 -e .
