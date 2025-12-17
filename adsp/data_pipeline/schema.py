@@ -171,4 +171,8 @@ def load_persona_profile(path: Union[str, Path]) -> PersonaProfileModel:
     return PersonaProfileModel(**payload)
 
 
-__all__ = ["PersonaProfile", "PersonaProfileModel", "load_persona_profile"]
+__all__ = [
+    "PersonaProfile",
+    "PersonaProfileModel",
+    "load_persona_profile",
+]
