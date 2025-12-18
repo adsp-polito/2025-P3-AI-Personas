@@ -230,6 +230,7 @@ class JSONToMarkdownConverter:
         """Format plot/chart data as markdown."""
         plot_type = plot_data.get("plot_type", "chart")
         title = plot_data.get("title", "")
+        caption = plot_data.get("caption", "")
         data_series = plot_data.get("data_series", [])
         notes = plot_data.get("notes", "")
         
@@ -242,6 +243,9 @@ class JSONToMarkdownConverter:
             markdown += f"### {element_text}\n\n"
         
         markdown += f"**{plot_type.replace('_', ' ').title()}**\n\n"
+
+        if caption:
+            markdown += f"*{caption}*\n\n"
         
         # Format data series
         if data_series:
@@ -288,6 +292,7 @@ class JSONToMarkdownConverter:
     def _format_donut_chart(self, donut_data: Dict[str, Any], element_text: str = "") -> str:
         """Format donut chart data as markdown."""
         slices = donut_data.get("slices", [])
+        caption = donut_data.get("caption", "")
         
         markdown = ""
         
@@ -296,6 +301,9 @@ class JSONToMarkdownConverter:
             markdown += f"### {element_text}\n\n"
         
         markdown += "**Donut Chart**\n\n"
+        
+        if caption:
+            markdown += f"*{caption}*\n\n"
         
         # Create table for slices
         if slices:
