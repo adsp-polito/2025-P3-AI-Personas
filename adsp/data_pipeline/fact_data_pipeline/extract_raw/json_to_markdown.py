@@ -198,10 +198,17 @@ class JSONToMarkdownConverter:
     
     def _format_list(self, list_data: Dict[str, Any], list_type: Optional[str] = None) -> str:
         """Format list data as markdown list."""
-        items = list_data.get("items", [])
-        if list_type is None:
-            list_type = list_data.get("type", "unordered")
-        list_title = list_data.get("title", "")
+        # Handle both old format (dict with "items" key) and new format (direct array)
+        if isinstance(list_data, list):
+            # list_data is directly an array
+            items = list_data
+            list_title = ""
+        else:
+            # list_data is a dict with "items", "type", "title" keys
+            items = list_data.get("items", [])
+            if list_type is None:
+                list_type = list_data.get("type", "unordered")
+            list_title = list_data.get("title", "")
         
         if not items:
             return ""
@@ -213,9 +220,9 @@ class JSONToMarkdownConverter:
             markdown += f"**{list_title}**\n\n"
         
         for idx, item in enumerate(items, 1):
-            # Handle both string items and dict items with 'text' or 'value' field
+            # Handle both string items and dict items with 'text', 'value', or 'item' field
             if isinstance(item, dict):
-                item_text = item.get("text") or item.get("value") or str(item)
+                item_text = item.get("text") or item.get("value") or item.get("item") or str(item)
             else:
                 item_text = str(item)
                 
