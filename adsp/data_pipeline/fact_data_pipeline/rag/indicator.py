@@ -17,7 +17,7 @@ from loguru import logger
 from .chunker import FactDataMarkdownChunker
 
 
-class FactDataIndicatorRAG:
+class FactDataRAG:
     """Embeds fact indicators and exposes similarity search over them."""
 
     def __init__(
@@ -97,4 +97,4 @@ def documents_to_context_prompt(documents: Iterable[Document]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-__all__ = ["FactDataIndicatorRAG", "documents_to_context_prompt"]
+__all__ = ["FactDataRAG", "documents_to_context_prompt"]
