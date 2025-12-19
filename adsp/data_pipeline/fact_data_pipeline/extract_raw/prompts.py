@@ -35,7 +35,7 @@ You must detect all visible elements, including but not limited to:
 	*	page numbers
 	*	logos
 	*	decorative but meaningful visuals
-Every detected element must appear as a separate object in JSON.
+Every detected element must appear as a separate object in JSON. Capture every information in the page, do not skip any piece of information.
 
 2. Reading order
 Elements must be output in natural reading order:
@@ -82,7 +82,10 @@ For all plots (bar, line, donut, pie, etc.):
     *	legends
     *	labels
     *	annotations
+    *	caption: any text in the center of donut/pie charts (e.g., average age, total percentage)
 	*	Explain what each number represents
+	*	For age distribution donuts: if there's text in the center (e.g., "39" or "Avg: 39"), extract it as "caption"
+	*	For any visualization, calculate and include summary statistics when relevant (e.g., average age from age distribution)
 Donut & Pie Charts (STRICT RULES)
 	*	Donut charts are read starting from the top and proceesing clockwise, for the values you read the legend next to the donut from top to bottom
   * By doing so, you will also match each donut slice by color to its corresponding legend box
@@ -91,6 +94,7 @@ Donut & Pie Charts (STRICT RULES)
 	*	You may change direction only if legend correspondence remains correct
 	*	The number of slices must match the number of unique legend colors
 	*	If a slice has no visible text, still extract it via color-legend matching
+	*	Center text: If there's any text in the center of the donut (numbers, labels, averages), extract it in the "caption" field
 	*	This rule is critical to avoid failures (e.g. age donuts on page 34, brand share charts on page 43+)
 
 7. Numerical Accuracy
@@ -168,6 +172,7 @@ Return only valid JSON. Do not include markdown code blocks (```json) or convers
         "plot": {
           "plot_type": "bar_chart | line_chart | pie_chart | other",
           "title": "<string | null>",
+          "caption": "<string | null>",
           "axes": {
             "x_axis": {
               "label": "<string | null>",
@@ -201,6 +206,7 @@ Return only valid JSON. Do not include markdown code blocks (```json) or convers
         },
         "donut_chart": {
           "traversal_direction": "clockwise | counterclockwise",
+          "caption": "<string | null>",
           "slices": [
             {
               "order": <integer>,

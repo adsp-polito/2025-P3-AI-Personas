@@ -86,6 +86,24 @@ class JSONToMarkdownConverter:
                 return f"- {text}\n\n"
             return ""
         
+        # Handle chart types (bar_chart, line_chart, pie_chart) via plot structure
+        if element_type in ("bar_chart", "line_chart", "pie_chart", "plot"):
+            if structured_content and "plot" in structured_content:
+                return self._format_plot(structured_content["plot"], text) + "\n\n"
+            # Fallback if no structured content
+            if text:
+                return f"**{text}**\n\n"
+            return ""
+        
+        # Handle donut_chart explicitly
+        if element_type == "donut_chart":
+            if structured_content and "donut_chart" in structured_content:
+                return self._format_donut_chart(structured_content["donut_chart"], text) + "\n\n"
+            # Fallback if no structured content
+            if text:
+                return f"**{text}**\n\n"
+            return ""
+        
         # Convert based on preferred block type
         if preferred_block == "heading":
             if element_type == "title":
@@ -132,7 +150,49 @@ class JSONToMarkdownConverter:
             return text + "\n\n" if text else ""
         
         else:
-            # Default to paragraph
+            # Default case: check for structured content even if preferred_block suggests paragraph
+            if structured_content:
+                # Check for table in structured content
+                if "table" in structured_content:
+                    return self._format_table(structured_content["table"]) + "\n\n"
+                # Check for plot in structured content
+                elif "plot" in structured_content:
+                    return self._format_plot(structured_content["plot"], text) + "\n\n"
+                # Check for donut_chart in structured content
+                elif "donut_chart" in structured_content:
+                    return self._format_donut_chart(structured_content["donut_chart"], text) + "\n\n"
+                # Check for list in structured content
+                elif "list" in structured_content:
+                    return self._format_list(structured_content["list"]) + "\n\n"
+
+            # Special formatting for specific element types
+            if element_type == "logo":
+                # Logos get bolded text
+                if text:
+                    return f"**{text}**\n\n"
+                return ""
+            elif element_type == "caption":
+                # Captions get italicized
+                if text:
+                    return f"*{text}*\n\n"
+                return ""
+            elif element_type == "text_box":
+                # Text boxes get formatted distinctly
+                if text:
+                    return f"text_box: {text}\n\n"
+                return ""
+            elif element_type in ("footer", "header", "page_number"):
+                # Metadata elements get simple formatting
+                if text:
+                    return f"{element_type}: {text}\n\n"
+                return ""
+            elif element_type == "legend":
+                # Legends are typically part of plots, but if standalone, format as list
+                if text:
+                    return f"*Legend: {text}*\n\n"
+                return ""
+            
+            # Generic fallback for paragraph, misc, and unknown types
             if text:
                 return f"{element_type}: {text}\n\n"
             return ""
@@ -198,10 +258,17 @@ class JSONToMarkdownConverter:
     
     def _format_list(self, list_data: Dict[str, Any], list_type: Optional[str] = None) -> str:
         """Format list data as markdown list."""
-        items = list_data.get("items", [])
-        if list_type is None:
-            list_type = list_data.get("type", "unordered")
-        list_title = list_data.get("title", "")
+        # Handle both old format (dict with "items" key) and new format (direct array)
+        if isinstance(list_data, list):
+            # list_data is directly an array
+            items = list_data
+            list_title = ""
+        else:
+            # list_data is a dict with "items", "type", "title" keys
+            items = list_data.get("items", [])
+            if list_type is None:
+                list_type = list_data.get("type", "unordered")
+            list_title = list_data.get("title", "")
         
         if not items:
             return ""
@@ -213,9 +280,9 @@ class JSONToMarkdownConverter:
             markdown += f"**{list_title}**\n\n"
         
         for idx, item in enumerate(items, 1):
-            # Handle both string items and dict items with 'text' or 'value' field
+            # Handle both string items and dict items with 'text', 'value', or 'item' field
             if isinstance(item, dict):
-                item_text = item.get("text") or item.get("value") or str(item)
+                item_text = item.get("text") or item.get("value") or item.get("item") or str(item)
             else:
                 item_text = str(item)
                 
@@ -230,6 +297,7 @@ class JSONToMarkdownConverter:
         """Format plot/chart data as markdown."""
         plot_type = plot_data.get("plot_type", "chart")
         title = plot_data.get("title", "")
+        caption = plot_data.get("caption", "")
         data_series = plot_data.get("data_series", [])
         notes = plot_data.get("notes", "")
         
@@ -242,6 +310,9 @@ class JSONToMarkdownConverter:
             markdown += f"### {element_text}\n\n"
         
         markdown += f"**{plot_type.replace('_', ' ').title()}**\n\n"
+
+        if caption:
+            markdown += f"*{caption}*\n\n"
         
         # Format data series
         if data_series:
@@ -288,6 +359,7 @@ class JSONToMarkdownConverter:
     def _format_donut_chart(self, donut_data: Dict[str, Any], element_text: str = "") -> str:
         """Format donut chart data as markdown."""
         slices = donut_data.get("slices", [])
+        caption = donut_data.get("caption", "")
         
         markdown = ""
         
@@ -296,6 +368,9 @@ class JSONToMarkdownConverter:
             markdown += f"### {element_text}\n\n"
         
         markdown += "**Donut Chart**\n\n"
+        
+        if caption:
+            markdown += f"*{caption}*\n\n"
         
         # Create table for slices
         if slices:

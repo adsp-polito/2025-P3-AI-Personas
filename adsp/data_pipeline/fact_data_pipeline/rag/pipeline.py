@@ -10,7 +10,7 @@ from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from loguru import logger
 
-from .indicator import FactDataIndicatorRAG
+from .indicator import FactDataRAG
 
 
 def run_fact_data_indexing_pipeline(
@@ -21,7 +21,7 @@ def run_fact_data_indexing_pipeline(
     chunk_overlap: int = 50,
     pattern: str = "page_*.md",
     vectorstore: Optional[InMemoryVectorStore] = None,
-) -> FactDataIndicatorRAG:
+) -> FactDataRAG:
     """
     Run the complete fact data indexing pipeline: chunk markdown files and index into RAG.
     
@@ -35,7 +35,7 @@ def run_fact_data_indexing_pipeline(
         vectorstore: Optional pre-initialized vector store. If None, creates InMemoryVectorStore
         
     Returns:
-        FactDataIndicatorRAG instance with indexed data ready for search
+        FactDataRAG instance with indexed data ready for search
     """
     markdown_dir = Path(markdown_dir)
     
@@ -65,7 +65,7 @@ def run_fact_data_indexing_pipeline(
     
     # Initialize RAG with chunking parameters
     logger.info("Initializing RAG system with chunker...")
-    rag = FactDataIndicatorRAG(
+    rag = FactDataRAG(
         embeddings=embedding_model,
         vectorstore=vectorstore,
         chunk_size=chunk_size,
