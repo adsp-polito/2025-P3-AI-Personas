@@ -86,6 +86,24 @@ class JSONToMarkdownConverter:
                 return f"- {text}\n\n"
             return ""
         
+        # Handle chart types (bar_chart, line_chart, pie_chart) via plot structure
+        if element_type in ("bar_chart", "line_chart", "pie_chart", "plot"):
+            if structured_content and "plot" in structured_content:
+                return self._format_plot(structured_content["plot"], text) + "\n\n"
+            # Fallback if no structured content
+            if text:
+                return f"**{text}**\n\n"
+            return ""
+        
+        # Handle donut_chart explicitly
+        if element_type == "donut_chart":
+            if structured_content and "donut_chart" in structured_content:
+                return self._format_donut_chart(structured_content["donut_chart"], text) + "\n\n"
+            # Fallback if no structured content
+            if text:
+                return f"**{text}**\n\n"
+            return ""
+        
         # Convert based on preferred block type
         if preferred_block == "heading":
             if element_type == "title":
@@ -146,8 +164,35 @@ class JSONToMarkdownConverter:
                 # Check for list in structured content
                 elif "list" in structured_content:
                     return self._format_list(structured_content["list"]) + "\n\n"
+
+            # Special formatting for specific element types
+            if element_type == "logo":
+                # Logos get bolded text
+                if text:
+                    return f"**{text}**\n\n"
+                return ""
+            elif element_type == "caption":
+                # Captions get italicized
+                if text:
+                    return f"*{text}*\n\n"
+                return ""
+            elif element_type == "text_box":
+                # Text boxes get formatted distinctly
+                if text:
+                    return f"text_box: {text}\n\n"
+                return ""
+            elif element_type in ("footer", "header", "page_number"):
+                # Metadata elements get simple formatting
+                if text:
+                    return f"{element_type}: {text}\n\n"
+                return ""
+            elif element_type == "legend":
+                # Legends are typically part of plots, but if standalone, format as list
+                if text:
+                    return f"*Legend: {text}*\n\n"
+                return ""
             
-            # Fallback to plain text
+            # Generic fallback for paragraph, misc, and unknown types
             if text:
                 return f"{element_type}: {text}\n\n"
             return ""

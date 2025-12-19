@@ -35,7 +35,7 @@ You must detect all visible elements, including but not limited to:
 	*	page numbers
 	*	logos
 	*	decorative but meaningful visuals
-Every detected element must appear as a separate object in JSON.
+Every detected element must appear as a separate object in JSON. Capture every information in the page, do not skip any piece of information.
 
 2. Reading order
 Elements must be output in natural reading order:
