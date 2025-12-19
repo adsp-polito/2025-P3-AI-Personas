@@ -132,7 +132,22 @@ class JSONToMarkdownConverter:
             return text + "\n\n" if text else ""
         
         else:
-            # Default to paragraph
+            # Default case: check for structured content even if preferred_block suggests paragraph
+            if structured_content:
+                # Check for table in structured content
+                if "table" in structured_content:
+                    return self._format_table(structured_content["table"]) + "\n\n"
+                # Check for plot in structured content
+                elif "plot" in structured_content:
+                    return self._format_plot(structured_content["plot"], text) + "\n\n"
+                # Check for donut_chart in structured content
+                elif "donut_chart" in structured_content:
+                    return self._format_donut_chart(structured_content["donut_chart"], text) + "\n\n"
+                # Check for list in structured content
+                elif "list" in structured_content:
+                    return self._format_list(structured_content["list"]) + "\n\n"
+            
+            # Fallback to plain text
             if text:
                 return f"{element_type}: {text}\n\n"
             return ""
