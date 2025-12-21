@@ -1249,46 +1249,6 @@ python scripts/extract_personas.py \
 
 ```
 
-### 6.2 Data Pipeline Execution
-
-**Persona Extraction Workflow:**
-
-```bash
-# 1. Prepare environment
-export VLLM_MODEL=mistralai/mistral-medium-3-instruct
-export VLLM_API_BASE=http://localhost:8000/v1
-export VLLM_API_KEY=your_api_key_here
-
-# 2. Run extraction pipeline
-python scripts/extract_personas.py \
-  --pdf data/raw/2023_Consumer_Segmentation.pdf \
-  --output data/processed/personas \
-  --page-range 10-50 \
-  --reuse-cache
-```
-
-**Fact Data Extraction Workflow:**
-
-```bash
-# 1. Run fact extraction
-python scripts/extract_fact_data.py \
-  --pdf data/raw/2023_Market_Study.pdf \
-  --output data/processed/fact_data
-
-# 2. Convert to markdown for RAG
-python scripts/convert_facts_to_markdown.py \
-  --input data/interim/fact_data/raw_responses \
-  --output data/processed/fact_data/pages
-
-```
-### 6.3 REST API Operation
-
-**Start FastAPI Server:**
-```bash
-python scripts/run_api.py
-````
-
-
 ##  Appendices
 
 ### Appendix A: Key File Locations
