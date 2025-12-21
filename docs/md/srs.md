@@ -1323,6 +1323,3 @@ VLLM_API_KEY=EMPTY
 - **Statement**: Individual insight within an indicator
 - **VLLM**: Vision-Language Model for PDF extraction
 
----
-
-**Document End**
