@@ -74,7 +74,7 @@ The system provides the following high-level capabilities:
 ### 2.4 Operating Environment
 - **Backend**: Python-based services (FastAPI)
 - **Deployment**: Local/private cloud infrastructure
-- **LLM Backend**: Open-source models (Llama 3, Mistral) with vLLM or OpenAI-compatible API
+- **LLM Backend**: Open-source models (Gemma 3, Mistral) 3 with vLLM or OpenAI-compatible API
 - **Data Storage**: JSON files, vector databases
 - **Frontend**: Web-based chat interface
 
@@ -188,7 +188,7 @@ Output: RetrievedContext(
 )
 ```
 
-**3b. Fact Data Retrieval (Optional)**
+**3b. Fact Data Retrieval**
 ```
 Query Construction:
   - If persona has name/summary:
@@ -1318,9 +1318,9 @@ python scripts/run_api.py
 **Environment Variables:**
 ```
 # LLM Backend
-ADSP_LLM_BACKEND=openai|stub
+ADSP_LLM_BACKEND=openai
 ADSP_LLM_BASE_URL=http://localhost:8000/v1
-ADSP_LLM_MODEL=llama-3-8b-instruct
+ADSP_LLM_MODEL=mistralai/mistral-medium-3-instruct
 ADSP_LLM_API_KEY=EMPTY
 
 # Fact Data RAG
