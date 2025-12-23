@@ -3,10 +3,6 @@
 import sys
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
 from adsp.data_pipeline.fact_data_pipeline.extract_raw import run_json_to_markdown_conversion
 from adsp.data_pipeline.fact_data_pipeline.extract_raw.config import FactDataExtractionConfig
 from loguru import logger

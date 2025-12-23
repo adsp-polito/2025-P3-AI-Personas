@@ -32,4 +32,5 @@ omegaconf
 langchain-text-splitters
 fastapi
 uvicorn[standard]
+streamlit
 -e .
