@@ -34,12 +34,24 @@ def render_chat_page():
         st.info("Please select a persona from the sidebar to start chatting")
         return
     
+    # Create tabs for Chat and Persona Info
+    tab1, tab2 = st.tabs(["💬 Chat", "👤 Persona Info"])
+    
+    with tab1:
+        render_chat_tab(client, active_session)
+    
+    with tab2:
+        render_persona_info_tab(client, active_session)
+
+def render_chat_tab(client: APIClient, active_session):
+    """Render the chat tab."""
+    
     # Display session info
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
         st.markdown(f"**Chatting with:** {active_session.persona_name}")
-    with col2:
-        st.markdown(f"**Session:** {active_session.session_id[:8]}...")
+    # with col2:
+        # st.markdown(f"**Session:** {active_session.session_id[:8]}...")
     with col3:
         if st.button("Clear Chat"):
             active_session.messages.clear()
@@ -143,6 +155,63 @@ def render_chat_page():
         
         if submit and user_input.strip():
             handle_chat_submission(client, active_session.session_id, user_input.strip())
+
+def render_persona_info_tab(client: APIClient, active_session):
+    """Render the persona info tab with profile and system prompt."""
+    
+    persona_id = active_session.persona_id
+    
+    st.subheader("Persona Profile")
+    
+    with st.spinner("Loading persona information..."):
+        profile = client.get_persona_profile(persona_id)
+        system_prompt = client.get_system_prompt(persona_id)
+    
+    if profile:
+        # Display persona profile
+        
+        if profile.get("persona_name"):
+            st.markdown(f"**Name:** {profile['persona_name']}")
+        
+        # Display style profile if available
+        style_profile = profile.get("style_profile")
+        if style_profile:
+            # Tone adjectives
+            if style_profile.get("tone_adjectives"):
+                st.markdown("#### Characteristics")
+                tone_list = style_profile["tone_adjectives"]
+                if isinstance(tone_list, list):
+                    for element in tone_list:
+                        st.markdown(f"- {element}")
+                else:
+                    st.write(tone_list)
+            
+            # Typical register examples
+            if style_profile.get("typical_register_examples"):
+                st.markdown("#### Typical Sentences")
+                examples = style_profile["typical_register_examples"]
+                if isinstance(examples, list):
+                    for example in examples:
+                        st.markdown(f"- _{example}_")
+                else:
+                    st.write(examples)
+        
+        st.markdown("---")
+        
+        if profile.get("summary_bio"):
+            st.markdown("#### Biography")
+            st.write(profile['summary_bio'])
+    else:
+        st.warning("Could not load persona profile")
+    
+    st.markdown("---")
+    
+    # System prompt in expander
+    with st.expander("🤖 System Prompt", expanded=False):
+        if system_prompt:
+            st.text(system_prompt)
+        else:
+            st.warning("Could not load system prompt")
 
 def handle_chat_submission(client: APIClient, session_id: str, user_input: str):
     """Handle chat message submission."""
