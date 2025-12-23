@@ -58,6 +58,12 @@ def initialize_session_state():
     
     if "top_k" not in st.session_state:
         st.session_state.top_k = 5
+    
+    if "waiting_for_response" not in st.session_state:
+        st.session_state.waiting_for_response = False
+    
+    if "pending_query" not in st.session_state:
+        st.session_state.pending_query = {}
 
 
 def get_active_session() -> Optional[ChatSession]:

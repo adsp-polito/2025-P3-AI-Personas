@@ -66,6 +66,37 @@ def render_chat_page():
                     if message.citations:
                         render_citations(message.citations)
     
+    # Check if we have a pending API call to make (after rendering messages)
+    if st.session_state.get("waiting_for_response", False):
+        pending = st.session_state.get("pending_query", {})
+        session_id = pending.get("session_id")
+        
+        if session_id:
+            with st.spinner("Thinking..."):
+                response = client.send_chat_message(
+                    persona_id=pending["persona_id"],
+                    query=pending["query"],
+                    session_id=session_id,
+                    top_k=pending.get("top_k", 5),
+                )
+            
+            if response:
+                answer = response.get("answer", "I'm sorry, I couldn't generate a response.")
+                context = response.get("context", "")
+                citations = response.get("citations", [])
+                
+                if not context and not citations:
+                    context = "No relevant documents found in RAG for this query. Answer generated from general knowledge."
+                
+                add_message_to_session(session_id, "assistant", answer, context=context, citations=citations)
+            else:
+                st.error("Failed to get response from the API. Please try again.")
+            
+            # Clear pending state
+            st.session_state.waiting_for_response = False
+            st.session_state.pending_query = {}
+            st.rerun()
+    
     # Chat input area
     st.markdown("---")
     
@@ -121,37 +152,17 @@ def handle_chat_submission(client: APIClient, session_id: str, user_input: str):
         st.error("Session not found")
         return
     
-    # Add user message
+    # Add user message immediately
     add_message_to_session(session_id, "user", user_input)
     
-    # Send to API
-    with st.spinner("Thinking..."):
-        response = client.send_chat_message(
-            persona_id=session.persona_id,
-            query=user_input,
-            session_id=session_id,
-            top_k=st.session_state.top_k,
-        )
+    # Set pending query state
+    st.session_state.waiting_for_response = True
+    st.session_state.pending_query = {
+        "session_id": session_id,
+        "persona_id": session.persona_id,
+        "query": user_input,
+        "top_k": st.session_state.top_k,
+    }
     
-    if response:
-        # Extract response data
-        answer = response.get("answer", "I'm sorry, I couldn't generate a response.")
-        context = response.get("context", "")
-        citations = response.get("citations", [])
-        
-        # If no context found
-        if not context and not citations:
-            context = "No relevant documents found in RAG for this query. Answer generated from general knowledge."
-        
-        # Add assistant message
-        add_message_to_session(
-            session_id,
-            "assistant",
-            answer,
-            context=context,
-            citations=citations,
-        )
-        
-        st.rerun()
-    else:
-        st.error("Failed to get response from the API. Please try again.")
+    # Rerun to show user message immediately
+    st.rerun()
