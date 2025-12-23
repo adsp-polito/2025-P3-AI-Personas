@@ -17,28 +17,26 @@ def render_user_message(message: ChatMessage):
     """Render a user message."""
     
     with st.container():
-        st.markdown(
+        st.html(
             f"""
             <div class="chat-message user-message">
                 <strong>You:</strong><br>
                 {message.content}
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
 def render_assistant_message(message: ChatMessage):
     """Render an assistant message."""
     
     with st.container():
-        st.markdown(
+        st.html(
             f"""
             <div class="chat-message assistant-message">
                 <strong>Assistant:</strong><br>
                 {message.content}
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 
 def render_citations(citations: List[Dict[str, Any]]):

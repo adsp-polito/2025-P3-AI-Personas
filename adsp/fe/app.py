@@ -34,14 +34,19 @@ def main():
             padding: 1rem;
             border-radius: 0.5rem;
             margin-bottom: 1rem;
+            max-width: 70%;
+            word-wrap: break-word;
         }
         .user-message {
             background-color: #E3F2FD;
             border-left: 4px solid #2196F3;
+            margin-left: auto;
+            text-align: left;
         }
         .assistant-message {
             background-color: #FFF3E0;
             border-left: 4px solid #FF9800;
+            margin-right: auto;
         }
         .stButton button {
             width: 100%;
