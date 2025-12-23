@@ -12,7 +12,7 @@ from langchain_core.embeddings import Embeddings
 from adsp.core.rag.persona_index import HashEmbeddings
 from adsp.core.types import Citation, RetrievedContext
 from adsp.data_pipeline.fact_data_pipeline.rag.indicator import (
-    FactDataIndicatorRAG,
+    FactDataRAG,
     documents_to_context_prompt,
 )
 
@@ -22,11 +22,11 @@ class FactDataRAGIndex:
     """In-memory similarity search over fact-data markdown chunks."""
 
     embeddings: Embeddings = field(default_factory=HashEmbeddings)
-    rag: FactDataIndicatorRAG = field(init=False)
+    rag: FactDataRAG = field(init=False)
     indexed_chunk_ids: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        self.rag = FactDataIndicatorRAG(self.embeddings)
+        self.rag = FactDataRAG(self.embeddings)
 
     def index_markdown_directory(self, directory: Path, *, pattern: str = "page_*.md") -> int:
         chunk_ids = self.rag.index_markdown_directory(Path(directory), pattern=pattern)

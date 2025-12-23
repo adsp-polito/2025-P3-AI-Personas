@@ -25,7 +25,7 @@ def render_chat_page():
     render_sidebar(client)
     
     # Main chat area
-    st.html('<div class="main-header">Lavazza AI Personas Chat</div>')
+    st.html('<div class="main-header">Lavazza AI Personas</div>')
     
     # Get active session
     active_session = get_active_session()
@@ -53,7 +53,7 @@ def render_chat_tab(client: APIClient, active_session):
     # with col2:
         # st.markdown(f"**Session:** {active_session.session_id[:8]}...")
     with col3:
-        if st.button("Clear Chat"):
+        if st.button("Clear Chat", type="primary"):
             active_session.messages.clear()
             st.rerun()
     

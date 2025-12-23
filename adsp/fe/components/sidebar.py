@@ -11,12 +11,12 @@ def render_sidebar(client: APIClient):
     with st.sidebar:
         # User info
         st.html(f"""
-            <div style="font-size: 2rem; font-weight: bold; color: #8B4513; margin-bottom: 1rem;">
+            <div style="font-size: 2rem; font-weight: bold; color: #041524; margin-bottom: 1rem;">
                 Welcome, {st.session_state.username}
             </div>
         """)
         
-        if st.button("Logout", width="stretch"):
+        if st.button("Logout", width="stretch", type="primary"):
             # Clear session
             api_url = st.session_state.api_url  # Keep API URL
             

@@ -26,7 +26,7 @@ def main():
         .main-header {
             font-size: 2.5rem;
             font-weight: bold;
-            color: #8B4513;
+            color: #041524;
             text-align: center;
             margin-bottom: 1rem;
         }
