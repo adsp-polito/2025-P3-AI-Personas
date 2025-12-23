@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from adsp.core.rag.fact_data_index import FactDataRAGIndex, build_fact_data_index_from_markdown
 from adsp.core.rag.persona_index import PersonaRAGIndex
 from adsp.core.types import RetrievedContext
 from adsp.storage.vector_db import VectorDatabase
@@ -31,4 +32,8 @@ class RAGPipeline:
         return RetrievedContext(context=self.vector_db.search(persona_id=persona_id, query=query))
 
 
-__all__ = ["RAGPipeline"]
+__all__ = [
+    "RAGPipeline",
+    "FactDataRAGIndex",
+    "build_fact_data_index_from_markdown",
+]
