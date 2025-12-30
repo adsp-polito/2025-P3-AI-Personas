@@ -290,7 +290,7 @@ For each query, manually label the relevance of retrieved documents.
     },
     {
       "page_content": "I like to try out new food or drink products",
-      "relevance_label": 0
+      "relevance": 0
     }
   ]
 }
