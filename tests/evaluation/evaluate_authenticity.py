@@ -18,11 +18,17 @@ from adsp.monitoring.evaluation_pipeline import AuthenticityEvaluator
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _default_questions_file() -> Path:
+def _default_questions_path() -> Path:
+    ground_truth_dir = REPO_ROOT / "data/evaluation/authenticity/ground_truth"
+    if ground_truth_dir.exists() and any(ground_truth_dir.glob("*.json")):
+        return ground_truth_dir
     return REPO_ROOT / "data/evaluation/authenticity/test_questions.json"
 
 
-def _default_evaluations_file() -> Path:
+def _default_evaluations_path() -> Path:
+    ground_truth_dir = REPO_ROOT / "data/evaluation/authenticity/ground_truth"
+    if ground_truth_dir.exists() and any(ground_truth_dir.glob("*.json")):
+        return ground_truth_dir
     return REPO_ROOT / "data/evaluation/authenticity/system_output/generated_responses.json"
 
 
@@ -96,6 +102,21 @@ def _normalize_question_entries(payload: Any) -> List[Dict[str, Any]]:
         return entries
 
     raise ValueError("Unsupported test questions format.")
+
+
+def _load_questions_payload(path: Path) -> List[Dict[str, Any]]:
+    if path.is_dir():
+        json_files = sorted(path.glob("*.json"))
+        if not json_files:
+            raise FileNotFoundError(f"No question JSON files found in: {path}")
+        entries: List[Dict[str, Any]] = []
+        for file_path in json_files:
+            payload = _load_questions_file(file_path)
+            entries.extend(_normalize_question_entries(payload))
+        return entries
+
+    payload = _load_questions_file(path)
+    return _normalize_question_entries(payload)
 
 
 def _resolve_persona_ids(
@@ -177,8 +198,8 @@ def _add_generate_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--questions-file",
         type=Path,
-        default=_default_questions_file(),
-        help="JSON file containing test questions.",
+        default=_default_questions_path(),
+        help="JSON file or directory containing test questions.",
     )
     parser.add_argument(
         "--persona-dir",
@@ -217,8 +238,8 @@ def _add_evaluate_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--evaluations-file",
         type=Path,
-        default=_default_evaluations_file(),
-        help="JSON file containing persona responses with ratings.",
+        default=_default_evaluations_path(),
+        help="JSON file or directory containing persona responses with ratings.",
     )
     parser.add_argument(
         "--output",
@@ -237,15 +258,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def _build_questions_payload(path: Path) -> List[Dict[str, Any]]:
-    if not path.exists():
-        fallback = _default_evaluations_file()
-        if path == _default_questions_file() and fallback.exists():
-            payload = _load_questions_file(fallback)
-        else:
-            raise FileNotFoundError(f"Questions file not found: {path}")
-    else:
-        payload = _load_questions_file(path)
-    return _normalize_question_entries(payload)
+    if path.exists():
+        return _load_questions_payload(path)
+
+    fallback = _default_evaluations_path()
+    if path == _default_questions_path() and fallback.exists():
+        return _load_questions_payload(fallback)
+    raise FileNotFoundError(f"Questions path not found: {path}")
 
 
 def _generate_template_ratings() -> Dict[str, Any]:
@@ -304,7 +323,9 @@ def _run_generate(args: argparse.Namespace) -> int:
 
 def _run_evaluate(args: argparse.Namespace) -> int:
     if not args.evaluations_file.exists():
-        raise FileNotFoundError(f"Evaluations file not found: {args.evaluations_file}")
+        raise FileNotFoundError(f"Evaluations path not found: {args.evaluations_file}")
+    if args.evaluations_file.is_dir() and not any(args.evaluations_file.glob("*.json")):
+        raise FileNotFoundError(f"No evaluation JSON files found in: {args.evaluations_file}")
 
     evaluator = AuthenticityEvaluator(evaluations_file=args.evaluations_file)
     results = evaluator.run_evaluation()

@@ -13,8 +13,11 @@ from adsp.core.rag.fact_data_index import build_fact_data_index_from_markdown
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _default_queries_file() -> Path:
-    return REPO_ROOT / "data/evaluation/rag_retrieval/ground_truth/test_queries.json"
+def _default_queries_path() -> Path:
+    ground_truth_dir = REPO_ROOT / "data/evaluation/rag_retrieval/ground_truth"
+    if ground_truth_dir.exists() and any(ground_truth_dir.glob("*.json")):
+        return ground_truth_dir
+    return ground_truth_dir / "test_queries.json"
 
 
 def _default_retrieval_output() -> Path:
@@ -29,11 +32,24 @@ def _default_fact_data_dir() -> Path:
     return REPO_ROOT / "data/processed/fact_data/pages"
 
 
-def _load_queries(path: Path) -> List[Dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def _normalize_queries_payload(payload: Any) -> List[Dict[str, Any]]:
     if isinstance(payload, dict) and isinstance(payload.get("test_queries"), list):
         return payload["test_queries"]
-    return payload
+    if isinstance(payload, list):
+        return payload
+    return []
+
+
+def _load_queries(path: Path) -> List[Dict[str, Any]]:
+    if path.is_dir():
+        entries: List[Dict[str, Any]] = []
+        for file_path in sorted(path.glob("*.json")):
+            payload = json.loads(file_path.read_text(encoding="utf-8"))
+            entries.extend(_normalize_queries_payload(payload))
+        return entries
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return _normalize_queries_payload(payload)
 
 
 def _doc_to_payload(doc: Any, *, rank: int, score: float | None) -> Dict[str, Any]:
@@ -151,8 +167,8 @@ def _add_retrieval_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--queries-file",
         type=Path,
-        default=_default_queries_file(),
-        help="JSON file containing test queries.",
+        default=_default_queries_path(),
+        help="JSON file or directory containing test queries.",
     )
     parser.add_argument(
         "--fact-data-dir",
@@ -208,7 +224,9 @@ def parse_args() -> argparse.Namespace:
 
 def _run_retrieval(args: argparse.Namespace) -> int:
     if not args.queries_file.exists():
-        raise FileNotFoundError(f"Queries file not found: {args.queries_file}")
+        raise FileNotFoundError(f"Queries path not found: {args.queries_file}")
+    if args.queries_file.is_dir() and not any(args.queries_file.glob("*.json")):
+        raise FileNotFoundError(f"No query JSON files found in: {args.queries_file}")
     if not args.fact_data_dir.exists():
         raise FileNotFoundError(f"Fact data dir not found: {args.fact_data_dir}")
 

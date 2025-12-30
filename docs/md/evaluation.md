@@ -230,7 +230,7 @@ Manually extract and verify statistics from 20-30 test pages (focus on Curious C
    Exact Match Accuracy = (Exactly Matching Values) / (Total Ground Truth Values)
    ```
 
-**Note:** A value is "exactly matching" if the value in ground truth exist in the markdown file.
+**Note:** A value is considered a match if more than 80% of the words from the ground truth appear in the markdown file.
 
 ## 5. Retrieval Relevance Evaluation
 

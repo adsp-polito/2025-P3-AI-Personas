@@ -22,13 +22,20 @@ def _default_system_output() -> Path:
     return primary
 
 
+def _default_ground_truth() -> Path:
+    ground_truth_dir = REPO_ROOT / "data/evaluation/fact_extraction/ground_truth"
+    if ground_truth_dir.exists() and any(ground_truth_dir.glob("*.json")):
+        return ground_truth_dir
+    return ground_truth_dir / "facts_ground_truth.json"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate fact extraction accuracy.")
     parser.add_argument(
         "--ground-truth-file",
         type=Path,
-        default=REPO_ROOT / "data/evaluation/fact_extraction/ground_truth/facts_ground_truth.json",
-        help="JSON file containing fact extraction ground truth.",
+        default=_default_ground_truth(),
+        help="JSON file or directory containing fact extraction ground truth.",
     )
     parser.add_argument(
         "--system-output",
@@ -48,7 +55,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     if not args.ground_truth_file.exists():
-        raise FileNotFoundError(f"Ground truth file not found: {args.ground_truth_file}")
+        raise FileNotFoundError(f"Ground truth path not found: {args.ground_truth_file}")
+    if args.ground_truth_file.is_dir() and not any(args.ground_truth_file.glob("*.json")):
+        raise FileNotFoundError(
+            f"No ground truth JSON files found in: {args.ground_truth_file}"
+        )
     if not args.system_output.exists():
         raise FileNotFoundError(f"System output not found: {args.system_output}")
 

@@ -530,11 +530,27 @@ class FactExtractionEvaluator:
     ground_truth_file: Path
     system_output_path: Path
 
-    def _load_ground_truth(self) -> List[Dict[str, Any]]:
-        payload = _load_json(self.ground_truth_file)
+    def _normalize_ground_truth_payload(self, payload: Any) -> List[Dict[str, Any]]:
+        if isinstance(payload, list):
+            return [entry for entry in payload if isinstance(entry, dict)]
         if isinstance(payload, dict):
-            return payload.get("facts", []) if "facts" in payload else [payload]
-        return payload
+            if "page_number" in payload:
+                return [payload]
+            facts = payload.get("facts")
+            if isinstance(facts, list):
+                return [entry for entry in facts if isinstance(entry, dict)]
+            return [payload]
+        return []
+
+    def _load_ground_truth(self) -> List[Dict[str, Any]]:
+        if self.ground_truth_file.is_dir():
+            entries: List[Dict[str, Any]] = []
+            for payload in _load_json_files(self.ground_truth_file):
+                entries.extend(self._normalize_ground_truth_payload(payload))
+            return entries
+
+        payload = _load_json(self.ground_truth_file)
+        return self._normalize_ground_truth_payload(payload)
 
     def _load_system_values(self) -> Tuple[Dict[int, List[Decimal]], str]:
         if self.system_output_path.is_dir():
@@ -762,11 +778,24 @@ class RAGRetrievalEvaluator:
 class AuthenticityEvaluator:
     evaluations_file: Path
 
-    def _load_evaluations(self) -> List[Dict[str, Any]]:
-        payload = _load_json(self.evaluations_file)
+    def _normalize_evaluations_payload(self, payload: Any) -> List[Dict[str, Any]]:
         if isinstance(payload, dict) and isinstance(payload.get("test_questions"), list):
-            return payload["test_questions"]
-        return payload
+            return [entry for entry in payload["test_questions"] if isinstance(entry, dict)]
+        if isinstance(payload, list):
+            return [entry for entry in payload if isinstance(entry, dict)]
+        if isinstance(payload, dict):
+            return [payload]
+        return []
+
+    def _load_evaluations(self) -> List[Dict[str, Any]]:
+        if self.evaluations_file.is_dir():
+            entries: List[Dict[str, Any]] = []
+            for payload in _load_json_files(self.evaluations_file):
+                entries.extend(self._normalize_evaluations_payload(payload))
+            return entries
+
+        payload = _load_json(self.evaluations_file)
+        return self._normalize_evaluations_payload(payload)
 
     def _extract_score(self, rating: Any) -> Optional[float]:
         if isinstance(rating, (int, float)):
