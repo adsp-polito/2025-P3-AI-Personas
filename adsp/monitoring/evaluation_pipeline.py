@@ -15,6 +15,7 @@ from .synonyms import WORD_SYNONYMS
 _NON_WORD_RE = re.compile(r"[^\w\s]+")
 _WHITESPACE_RE = re.compile(r"\s+")
 _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+_FACT_WORD_COVERAGE_THRESHOLD = 0.8
 
 
 def _normalize_text(text: str) -> str:
@@ -37,6 +38,23 @@ def _word_overlap_ratio(left: str, right: str) -> float:
         return 0.0
     shared = left_words & right_words
     return len(shared) / min(len(left_words), len(right_words))
+
+
+def _tokenize_words(text: str) -> List[str]:
+    normalized = _normalize_text(text)
+    return normalized.split() if normalized else []
+
+
+def _ground_truth_word_coverage(value: Any, page_text: str) -> float:
+    if value is None:
+        return 0.0
+    ground_truth_words = set(_tokenize_words(str(value)))
+    if not ground_truth_words:
+        return 0.0
+    page_words = set(_tokenize_words(page_text))
+    if not page_words:
+        return 0.0
+    return len(ground_truth_words & page_words) / len(ground_truth_words)
 
 
 def _parse_page_number(payload: Dict[str, Any]) -> Optional[int]:
@@ -499,32 +517,6 @@ class PersonaExtractionEvaluator:
         }
 
 
-def _extract_markdown_numbers(text: str) -> List[Decimal]:
-    numbers: List[Decimal] = []
-    for match in _NUMBER_RE.finditer(text.replace(",", "")):
-        try:
-            numbers.append(Decimal(match.group(0)))
-        except InvalidOperation:
-            continue
-    return numbers
-
-
-def _extract_fact_values_from_json(payload: List[Dict[str, Any]]) -> Dict[int, List[Decimal]]:
-    values: Dict[int, List[Decimal]] = {}
-    for entry in payload:
-        if not isinstance(entry, dict):
-            continue
-        page_number = entry.get("page_number")
-        if page_number is None:
-            continue
-        page_values = values.setdefault(int(page_number), [])
-        for fact in entry.get("facts", []) or []:
-            number = _safe_decimal(fact.get("value"))
-            if number is not None:
-                page_values.append(number)
-    return values
-
-
 @dataclass
 class FactExtractionEvaluator:
     ground_truth_file: Path
@@ -552,47 +544,31 @@ class FactExtractionEvaluator:
         payload = _load_json(self.ground_truth_file)
         return self._normalize_ground_truth_payload(payload)
 
-    def _load_system_values(self) -> Tuple[Dict[int, List[Decimal]], str]:
+    def _load_system_pages(self) -> Tuple[Dict[int, str], str]:
         if self.system_output_path.is_dir():
             markdown_files = list(self.system_output_path.glob("*.md"))
             if markdown_files:
-                values = {
-                    int(_NUMBER_RE.search(path.stem).group(0)): _extract_markdown_numbers(
-                        path.read_text(encoding="utf-8")
-                    )
-                    for path in markdown_files
-                    if _NUMBER_RE.search(path.stem)
-                }
-                return values, "markdown"
-            json_files = list(self.system_output_path.glob("*.json"))
-            if json_files:
-                payloads = _load_json_files(self.system_output_path)
-                merged: Dict[int, List[Decimal]] = {}
-                for payload in payloads:
-                    if isinstance(payload, list):
-                        for page, numbers in _extract_fact_values_from_json(payload).items():
-                            merged.setdefault(page, []).extend(numbers)
-                return merged, "json"
+                page_texts: Dict[int, str] = {}
+                for path in markdown_files:
+                    match = _NUMBER_RE.search(path.stem)
+                    if not match:
+                        continue
+                    page_number = int(match.group(0))
+                    text = path.read_text(encoding="utf-8")
+                    page_texts[page_number] = text
+                return page_texts, "markdown"
             return {}, "unknown"
 
         if self.system_output_path.suffix.lower() == ".md":
             page_number = int(_NUMBER_RE.search(self.system_output_path.stem).group(0))
-            return {
-                page_number: _extract_markdown_numbers(
-                    self.system_output_path.read_text(encoding="utf-8")
-                )
-            }, "markdown"
+            text = self.system_output_path.read_text(encoding="utf-8")
+            return {page_number: text}, "markdown"
 
-        payload = _load_json(self.system_output_path)
-        if isinstance(payload, list):
-            return _extract_fact_values_from_json(payload), "json"
-        if isinstance(payload, dict) and isinstance(payload.get("results"), list):
-            return _extract_fact_values_from_json(payload["results"]), "json"
         return {}, "unknown"
 
     def run_evaluation(self) -> Dict[str, Any]:
         ground_truth = self._load_ground_truth()
-        system_values, source = self._load_system_values()
+        page_texts, source = self._load_system_pages()
 
         total_values = 0
         matched_values = 0
@@ -605,20 +581,14 @@ class FactExtractionEvaluator:
             if page_number is None:
                 continue
             page_number = int(page_number)
-            extracted_numbers = system_values.get(page_number, [])
-            extracted_set = set(extracted_numbers)
-
             for fact in entry.get("facts", []) or []:
                 total_values += 1
                 gt_value = fact.get("value")
-                gt_number = _safe_decimal(gt_value)
                 matched = False
-                if gt_number is not None:
-                    matched = gt_number in extracted_set
-                else:
-                    matched = _normalize_text(str(gt_value)) in _normalize_text(
-                        " ".join(str(value) for value in extracted_numbers)
-                    )
+                if source == "markdown":
+                    page_text = page_texts.get(page_number, "")
+                    coverage = _ground_truth_word_coverage(gt_value, page_text)
+                    matched = coverage > _FACT_WORD_COVERAGE_THRESHOLD
                 if matched:
                     matched_values += 1
                 mismatch_reason = None if matched else "value_not_found"

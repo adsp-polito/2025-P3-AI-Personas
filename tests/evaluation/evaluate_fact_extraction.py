@@ -13,11 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _default_system_output() -> Path:
-    primary = REPO_ROOT / "data/evaluation/fact_extraction/system_output/extraction_results.json"
-    if primary.exists():
+    primary = REPO_ROOT / "data/processed/fact_data/pages"
+    if primary.exists() and any(primary.glob("*.md")):
         return primary
-    fallback = REPO_ROOT / "data/processed/fact_data/pages"
-    if fallback.exists():
+    fallback = REPO_ROOT / "data/evaluation/fact_extraction/system_output"
+    if fallback.exists() and any(fallback.glob("*.md")):
         return fallback
     return primary
 
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
         "--system-output",
         type=Path,
         default=_default_system_output(),
-        help="Directory or JSON file containing system output.",
+        help="Directory or markdown file containing system output.",
     )
     parser.add_argument(
         "--output",
