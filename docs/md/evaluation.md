@@ -118,24 +118,66 @@ Verify that persona indicators (categories,statements, metrics) are correctly ex
 
 2. **Metric Recall**
    ```
-   Indicator Recall = (Correctly Extracted Metrics) / (Total Ground Truth Metrics)
+   Metrics Recall = (Correctly Metrics) / (Total Ground Truth Metrics)
    ```
 
 3. **Metric Precision**
    ```
-   Indicator Precision = (Correct Metrics) / (All Extracted Metrics)
+   Metrics Precision = (Correct Metrics) / (All Extracted Metrics)
    ```
 
-5. **Metric Accuracy**
-   ```
-   Metric Accuracy = (Correct Numeric Values) / (Total Metrics)
-   ```
 
-**Note**: A numeric value is "correct" if its indicator matches ground truth's indicator and it matches the ground truth
-and the unit is correct; A indicator matches ground truth's indicator if the label or description of indicator contain
-the ground truth's label.
+**Metric Matching Rules**
 
----
+Only retain **indicators** and **statements** that contain **at least one metric**.
+
+A metric is considered a match with a ground truth metric **if all of the following conditions are satisfied**:
+
+   1. Indicator Match
+
+   An indicator matches the ground truth if the number of shared words between the indicator label (or description) and the ground truth label, divided by the smaller word count, is at least 70%.
+   2. Statement Label Match
+   
+   A statement label matches the ground truth if the number of shared words between the statement label and the ground truth label, divided by the smaller word count, is at least 70%.
+   
+   3. Value Match
+   
+   The metric value must match the ground truth value.
+   
+   4. Unit Match
+   
+   Units are considered equivalent if they belong to the same synonym group defined below.
+   
+   **Unit Synonym Mapping**
+   
+   | Equivalent Units |
+   | ---------------- |
+   | %, percentage    |
+   | index, idx       |
+   | €, euro, eur     |
+   | $, dollar, usd   |
+   | £, pound, gbp    |
+   | ¥, yen, jpy      |
+   | ₹, rupee, inr    |
+   | ₩, won, krw      |
+   | ₽, ruble, rub    |
+   | ₺, lira, try     |
+   | ₫, dong, vnd     |
+   | ₱, peso, php     |
+   | ₦, naira, ngn    |
+   | ₴, hryvnia, uah  |
+   | ₡, colon, crc    |
+   | ₲, guarani, pyg  |
+   | ₵, cedi, ghc     |
+   | ₸, tenge, kzt    |
+   | ₼, manat, azn    |
+
+**Implementation Notes**
+
+* Normalize text (lowercase, remove punctuation, collapse whitespace) before computing word intersections.
+* Apply the 70% threshold consistently across all matching steps.
+
+
 
 ## 4. Fact Extraction Accuracy Evaluation
 
@@ -267,6 +309,12 @@ For each query, manually label the relevance of retrieved documents.
    ```
    Recall@K = (Relevant docs in top-K) / (Total relevant docs)
    ```
+**Implementation notes:**
+
+* Set retrieval **top-k = 20** (configable) to ensure high recall.
+* Manually review the retrieved chunks and mark those that are relevant.
+* Treat **all marked relevant chunks** as the ground-truth recall set.
+* Compute **Precision@k** and **Recall@k** for **k = 3, 5, 10, and 20**.
 
 ## 6. Authenticity Evaluation
 
