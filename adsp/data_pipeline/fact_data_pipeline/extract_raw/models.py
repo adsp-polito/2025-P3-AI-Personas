@@ -18,6 +18,5 @@ class PageImage:
 @dataclass
 class PageExtractionResult:
     page_number: int
-    raw_text: str
-    parsed: Optional[dict]
+    markdown_content: str
     error: Optional[str] = None

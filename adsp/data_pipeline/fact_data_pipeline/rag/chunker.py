@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import yaml
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from loguru import logger
@@ -95,6 +95,39 @@ class FactDataMarkdownChunker:
             logger.error(f"Failed to chunk {file_path.name}: {e}")
             return []
     
+    @staticmethod
+    def _remove_markdown_links(text: str) -> str:
+        """Remove markdown links but keep the link text.
+        
+        Converts [link text](url) to link text
+        """
+        # Remove markdown links: [text](url) -> text
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+        # Remove reference-style links: [text][ref] -> text
+        text = re.sub(r'\[([^\]]+)\]\[[^\]]+\]', r'\1', text)
+        return text
+    
+    @staticmethod
+    def _extract_header_lines(content: str) -> str:
+        """Extract the first three lines (Segment, Page, Section) from markdown content.
+        
+        Returns:
+            The first three lines as a string, or empty string if not found
+        """
+        lines = content.split('\n')
+        header_lines = []
+        
+        for line in lines[:10]:  # Check first 10 lines to be safe
+            stripped = line.strip()
+            if stripped.startswith('# Segment:') or \
+               stripped.startswith('## Page:') or \
+               stripped.startswith('### Section:'):
+                header_lines.append(stripped)
+            if len(header_lines) == 3:
+                break
+        
+        return '\n'.join(header_lines) if header_lines else ''
+
     def chunk_markdown_text(
         self,
         content: str,
@@ -112,11 +145,11 @@ class FactDataMarkdownChunker:
         Returns:
             List of Document objects with chunked content
         """
-        # Extract and parse YAML frontmatter
-        frontmatter_metadata = self._extract_frontmatter(content)
+        # Extract header lines
+        header_prefix = self._extract_header_lines(content)
         
-        # Remove YAML frontmatter (it's already in metadata and shouldn't be embedded)
-        content = self._remove_frontmatter(content)
+        # Remove markdown links but keep link text
+        content = self._remove_markdown_links(content)
         
         if not content.strip():
             return []
@@ -129,10 +162,12 @@ class FactDataMarkdownChunker:
         for idx, doc in enumerate(header_splits):
             # Check if document needs further splitting
             if len(doc.page_content) <= self.chunk_size:
-                # Small enough, keep as is
+                # Small enough, prepend header and keep as is
+                content_with_header = f"{header_prefix}\n\n{doc.page_content}" if header_prefix else doc.page_content
                 chunks.append(
                     self._add_metadata(
-                        doc, source_file, page_number, idx, frontmatter_metadata
+                        Document(page_content=content_with_header, metadata=doc.metadata),
+                        source_file, page_number, idx
                     )
                 )
             else:
@@ -140,9 +175,12 @@ class FactDataMarkdownChunker:
                 sub_chunks = self.text_splitter.split_documents([doc])
                 for sub_idx, sub_doc in enumerate(sub_chunks):
                     chunk_id = f"{idx}_{sub_idx}"
+                    # Prepend header to each sub-chunk
+                    content_with_header = f"{header_prefix}\n\n{sub_doc.page_content}" if header_prefix else sub_doc.page_content
                     chunks.append(
                         self._add_metadata(
-                            sub_doc, source_file, page_number, chunk_id, frontmatter_metadata
+                            Document(page_content=content_with_header, metadata=sub_doc.metadata),
+                            source_file, page_number, chunk_id
                         )
                     )
         
@@ -155,49 +193,17 @@ class FactDataMarkdownChunker:
         
         return chunks
     
-    def _extract_frontmatter(self, content: str) -> Dict[str, any]:
-        """Extract and parse YAML frontmatter from markdown content."""
-        lines = content.split("\n")
-        if lines and lines[0].strip() == "---":
-            # Find the closing ---
-            for i in range(1, len(lines)):
-                if lines[i].strip() == "---":
-                    # Parse YAML frontmatter
-                    frontmatter_text = "\n".join(lines[1:i])
-                    try:
-                        return yaml.safe_load(frontmatter_text) or {}
-                    except yaml.YAMLError as e:
-                        logger.warning(f"Failed to parse YAML frontmatter: {e}")
-                        return {}
-        return {}
-    
-    def _remove_frontmatter(self, content: str) -> str:
-        """Remove YAML frontmatter from markdown content."""
-        lines = content.split("\n")
-        if lines and lines[0].strip() == "---":
-            # Find the closing ---
-            for i in range(1, len(lines)):
-                if lines[i].strip() == "---":
-                    # Return content after frontmatter
-                    return "\n".join(lines[i + 1:])
-        return content
-    
     def _add_metadata(
         self,
         doc: Document,
         source_file: str,
         page_number: int,
         chunk_id: any,
-        frontmatter_metadata: Optional[Dict[str, any]] = None,
     ) -> Document:
         """Add metadata to a document chunk."""
         metadata = doc.metadata.copy() if doc.metadata else {}
         
-        # Add frontmatter metadata (segment, section, template, etc.)
-        if frontmatter_metadata:
-            metadata.update(frontmatter_metadata)
-        
-        # Add chunk-specific metadata (these override frontmatter if conflicts)
+        # Add chunk-specific metadata
         metadata.update({
             "source_file": source_file,
             "page_number": page_number,

@@ -97,56 +97,70 @@ class FactDataExtractionPipeline:
 
     def _write_page(self, state: Dict[str, Any]) -> Dict[str, Any]:
         page_results: Sequence[PageExtractionResult] = state["page_results"]
-        logger.info(f"Writing page-level outputs for {len(page_results)} pages processed")
+        logger.info(f"Writing markdown outputs for {len(page_results)} pages processed")
         
-        self._write_page_outputs(page_results)
+        self._write_markdown_files(page_results)
 
         # return the final state, which contains the page-level results
         return state
 
-    def _write_page_outputs(self, page_results: Sequence[PageExtractionResult]) -> None:
-        path = self.config.structured_pages_output_path
-        if not path:
-            return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = [
-            {
-                "page": r.page_number,
-                "parsed": r.parsed,
-                "error": r.error,
-                "raw_text": r.raw_text,
-            }
-            for r in page_results
-        ]
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False)
-        logger.info(f"Wrote structured page outputs to {path}")
+    def _write_markdown_files(self, page_results: Sequence[PageExtractionResult]) -> None:
+        """Write extracted markdown content directly to data/processed/fact_data/pages directory."""
+        output_dir = self.config.fact_data_output_dir / "pages"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        for result in page_results:
+            if result.error:
+                logger.warning(f"Skipping page {result.page_number} due to error: {result.error}")
+                continue
+            
+            output_path = output_dir / f"page_{result.page_number:04d}.md"
+            with output_path.open("w", encoding="utf-8") as f:
+                f.write(result.markdown_content)
+            logger.debug(f"Wrote markdown for page {result.page_number} -> {output_path}")
+        
+        logger.info(f"Wrote {len([r for r in page_results if not r.error])} markdown files to {output_dir}")
 
     def _load_cached_results(self, pages: Sequence[PageImage]) -> Dict[int, PageExtractionResult]:
         cached: Dict[int, PageExtractionResult] = {}
         for page in pages:
+            # Check markdown cache first
+            markdown_cache_path = self.config.fact_data_output_dir / "pages" / f"page_{page.page_number:04d}.md"
+            if markdown_cache_path.exists():
+                try:
+                    with markdown_cache_path.open("r", encoding="utf-8") as f:
+                        markdown_content = f.read()
+                    cached[page.page_number] = PageExtractionResult(
+                        page_number=page.page_number,
+                        markdown_content=markdown_content,
+                        error=None,
+                    )
+                    continue
+                except Exception as exc:
+                    logger.warning(
+                        f"Could not load cached markdown for page {page.page_number} ({markdown_cache_path}): {exc}"
+                    )
+            
+            # Fall back to old JSON cache format if it exists
             cache_path = self.config.raw_responses_dir / f"page_{page.page_number:04d}.json"
             if not cache_path.exists():
                 continue
             try:
                 with cache_path.open("r", encoding="utf-8") as f:
                     payload = json.load(f)
-                parsed = payload.get("parsed") if isinstance(payload, dict) else None
-                if parsed is not None and not isinstance(parsed, dict):
-                    parsed = None
-                raw_text = payload.get("raw_text", "") if isinstance(payload, dict) else ""
+                markdown_content = payload.get("markdown_content", "") if isinstance(payload, dict) else ""
                 error = payload.get("error") if isinstance(payload, dict) else None
                 if error:
                     logger.info(
                         f"Skipping cached page {page.page_number} because previous run failed: {error}"
                     )
                     continue
-                cached[page.page_number] = PageExtractionResult(
-                    page_number=page.page_number,
-                    raw_text=raw_text,
-                    parsed=parsed,
-                    error=error,
-                )
+                if markdown_content:
+                    cached[page.page_number] = PageExtractionResult(
+                        page_number=page.page_number,
+                        markdown_content=markdown_content,
+                        error=error,
+                    )
             except Exception as exc:
                 logger.warning(
                     f"Could not load cached result for page {page.page_number} ({cache_path}): {exc}"
@@ -161,19 +175,18 @@ class FactDataExtractionPipeline:
             out_path = self.config.raw_responses_dir / f"page_{result.page_number:04d}.json"
             payload = {
                 "page": result.page_number,
-                "parsed": result.parsed,
+                "markdown_content": result.markdown_content,
                 "error": result.error,
-                "raw_text": result.raw_text,
             }
             with out_path.open("w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
             logger.debug(f"Wrote raw response for page {result.page_number} -> {out_path}")
             if self.config.debug:
-                debug_path = self.config.debug_dir / f"page_{result.page_number:04d}.txt"
-                debug_payload = result.raw_text or ""
+                debug_path = self.config.debug_dir / f"page_{result.page_number:04d}.md"
+                debug_payload = result.markdown_content or ""
                 with debug_path.open("w", encoding="utf-8") as f:
                     f.write(debug_payload)
-                logger.debug(f"Wrote debug raw text for page {result.page_number} -> {debug_path}")
+                logger.debug(f"Wrote debug markdown for page {result.page_number} -> {debug_path}")
 
 
 def run_fact_data_extraction_pipeline(

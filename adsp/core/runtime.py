@@ -127,16 +127,7 @@ def build_fact_data_index(*, processed_dir: Path = PROCESSED_DATA_DIR) -> Option
         logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
         return index
 
-    json_dir = Path(os.environ.get("ADSP_FACTDATA_JSON_DIR", str(cfg.raw_responses_dir)))
-    if json_dir.exists() and any(json_dir.glob("page_*.json")):
-        try:
-            from adsp.data_pipeline.fact_data_pipeline.extract_raw import run_json_to_markdown_conversion
-
-            converted = run_json_to_markdown_conversion(json_dir, markdown_dir)
-            logger.info(f"Converted {converted} fact data JSON pages -> markdown for indexing")
-        except Exception as exc:  # pragma: no cover - best effort conversion
-            logger.warning(f"Fact data JSON->markdown conversion failed: {exc}")
-
+    if markdown_dir.exists() and any(markdown_dir.glob(markdown_pattern)):
         index = build_fact_data_index_from_markdown(markdown_dir, pattern=markdown_pattern)
         if index is not None:
             logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
@@ -152,12 +143,10 @@ def build_fact_data_index(*, processed_dir: Path = PROCESSED_DATA_DIR) -> Option
     try:
         from adsp.data_pipeline.fact_data_pipeline.extract_raw import (
             run_fact_data_extraction_pipeline,
-            run_json_to_markdown_conversion,
         )
 
         run_fact_data_extraction_pipeline(cfg)
-        converted = run_json_to_markdown_conversion(cfg.raw_responses_dir, markdown_dir)
-        logger.info(f"Converted {converted} extracted fact data pages -> markdown")
+        logger.info("Fact data extraction completed - markdown files generated")
     except Exception as exc:  # pragma: no cover - external pipeline
         logger.warning(f"Fact data extraction pipeline failed: {exc}")
         return None

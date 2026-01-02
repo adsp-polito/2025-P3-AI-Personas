@@ -217,15 +217,13 @@ def main(raw_args: Optional[list[str]] = None) -> None:
     summary = {
         "page_numbers": page_numbers,
         "pages_processed": [r.page_number for r in result["page_results"]],
-        # each r.parsed is the dictionary following the JSON structure in the prompts
-        "pages_with_persona": [
+        "pages_with_content": [
             r.page_number
             for r in result["page_results"]
-            if r.parsed and isinstance(r.parsed.get("elements"), list) and r.parsed.get("elements")
+            if r.markdown_content and r.markdown_content.strip() and not r.error
         ],
-        "output_path": str(config.raw_responses_dir), # path to output
-        "qa_report_path": str(config.qa_report_path),
-        "structured_pages_output_path": str(config.structured_pages_output_path),
+        "markdown_output_dir": str(config.fact_data_output_dir / "pages"),
+        "cache_dir": str(config.raw_responses_dir),
     }
     print(json.dumps(summary, indent=2))
 

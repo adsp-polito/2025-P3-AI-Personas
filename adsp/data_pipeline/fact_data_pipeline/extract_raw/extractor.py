@@ -12,7 +12,7 @@ from loguru import logger
 from .config import FactDataExtractionConfig
 from .models import PageExtractionResult, PageImage
 from .prompts import SYSTEM_PROMPT
-from .utils import encode_image_base64, strip_json_markdown
+from .utils import encode_image_base64
 
 
 class VLLMOpenAIExtractor:
@@ -107,15 +107,11 @@ class VLLMOpenAIExtractor:
                     timeout=self.response_timeout,
                 )
                 raw_text = response.choices[0].message.content or ""
-                parsed = self._select_parsed_for_page(
-                    self._parse_raw_response(raw_text), page.page_number
-                )
-                if parsed is None:
-                    raise ValueError("Model returned unparsable JSON.")
+                if not raw_text or not raw_text.strip():
+                    raise ValueError("Model returned empty response.")
                 return PageExtractionResult(
                     page_number=page.page_number,
-                    raw_text=raw_text,
-                    parsed=parsed,
+                    markdown_content=raw_text,
                     error=None,
                 )
             except Exception as exc:  # pragma: no cover - external call
@@ -132,38 +128,10 @@ class VLLMOpenAIExtractor:
 
         return PageExtractionResult(
             page_number=page.page_number,
-            raw_text=raw_text,
-            parsed=None,
+            markdown_content=raw_text,
             error=last_error,
         )
 
-    @staticmethod
-    def _parse_raw_response(raw_text: str) -> Optional[Any]:
-        """
-        This static method attempts to parse the model's raw text response. It uses the strip_json_markdown utility and tries
-        multiple strategies to find a valid JSON object or list within the string, making the parsing robust against common LLM output
-        inconsistencies
-        """
-        cleaned = strip_json_markdown(raw_text)
-        candidates = [cleaned]
-
-        if "{" in cleaned and "}" in cleaned:
-            start = cleaned.find("{")
-            end = cleaned.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                candidates.append(cleaned[start : end + 1])
-        if "[" in cleaned and "]" in cleaned:
-            start = cleaned.find("[")
-            end = cleaned.rfind("]")
-            if start != -1 and end != -1 and end > start:
-                candidates.append(cleaned[start : end + 1])
-
-        for candidate in candidates:
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                continue
-        return None
 
     @staticmethod
     def _build_context_pages(
@@ -197,37 +165,14 @@ class VLLMOpenAIExtractor:
         self, primary_page: PageImage, context_pages: Sequence[PageImage]
     ) -> List[dict]:
         preface = (
-            "Extract structured JSON for the primary slide below. "
-            f"The primary slide number is {primary_page.page_number}. "
-            "Use the other slides only as context to understand cross-page continuity "
-            "and fill adjacent context/linking notes. Return JSON for the primary slide only."
+            "Extract and convert to Markdown the primary page below. "
+            f"The primary page number is {primary_page.page_number}. "
+            "Use the other pages only as context to understand cross-page continuity. "
+            "Return Markdown for the primary page only."
         )
         content: List[dict] = [{"type": "text", "text": preface}]
         for ctx_page in context_pages:
-            label = "Primary slide" if ctx_page.page_number == primary_page.page_number else "Context slide"
+            label = "Primary page" if ctx_page.page_number == primary_page.page_number else "Context page"
             content.append({"type": "text", "text": f"{label} #{ctx_page.page_number}"})
             content.append(self._image_content(ctx_page))
         return content
-
-    @staticmethod
-    def _select_parsed_for_page(parsed: Any, page_number: int) -> Optional[dict]:
-        if parsed is None:
-            return None
-        if isinstance(parsed, dict):
-            return parsed
-        if isinstance(parsed, list):
-            for item in parsed:
-                if not isinstance(item, dict):
-                    continue
-                metadata = item.get("page_metadata") or {}
-                number = metadata.get("page_number")
-                try:
-                    normalized = int(number)
-                except Exception:
-                    normalized = number
-                if normalized == page_number:
-                    return item
-            for item in parsed:
-                if isinstance(item, dict):
-                    return item
-        return None
