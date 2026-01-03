@@ -363,7 +363,7 @@ Use the system to generate responses for the persona to all test questions.
 2. **Style Alignment**
     - Tone, vocabulary, reasoning depth
     - 1 = Poorly aligned, 5 = Perfectly aligned
-      3.**Factual Grounding**
+3. **Factual Grounding**
     - Are statements factually accurate and well-cited?
     - 1 = No citations/hallucinations, 5 = Well-cited and accurate
 
