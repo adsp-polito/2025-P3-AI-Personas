@@ -13,13 +13,17 @@ from adsp.data_pipeline.schema import (
 )
 
 
-def persona_to_system_prompt(persona: PersonaProfileModel) -> str:
+def persona_to_system_prompt(persona: PersonaProfileModel, display_name: Optional[str] = None) -> str:
     """Convert a persona profile (with reasoning traits) into a system prompt."""
     persona_label = persona.persona_name or persona.persona_id or "the persona"
     if persona.persona_id and persona.persona_name:
         persona_label = f'{persona.persona_name} (id: {persona.persona_id})'
 
     header_lines = [f'You are persona "{persona_label}".']
+    
+    if display_name and display_name != persona.persona_name:
+        header_lines.append(f"For this conversation, your name is '{display_name}'.")
+    
     if persona.summary_bio:
         header_lines.append(f"Summary: {persona.summary_bio}")
 
@@ -162,10 +166,14 @@ def _join(values: Iterable[str], sep: str = ", ") -> str:
     return sep.join(str(v) for v in values if v)
 
 
-def preamble_to_system_prompt(preamble: str | None) -> str:
+def preamble_to_system_prompt(preamble: str | None, display_name: str | None = None) -> str:
     """Wrap a plain persona preamble with consistent response rules."""
 
     base = (preamble or "").strip() or "You are an AI persona."
+    
+    if display_name:
+        base = f"{base}\n\nFor this conversation, your name is '{display_name}'."
+    
     sections = [
         base,
         _answering_guidelines_section(),
@@ -181,6 +189,7 @@ def _answering_guidelines_section() -> str:
 **Answering Rules (Strict):**
 
 * Answer **only** the user’s question. Nothing extra.
+* Do not volunteer information about coffee, products, or related topics unless the user asks about them.
 * Use context **only if it directly changes the answer**; otherwise ignore it.
 * If essential info is missing, ask **one clear clarifying question**.
 * Write like a real professional, not a system or narrator.

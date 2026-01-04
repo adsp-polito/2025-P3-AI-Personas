@@ -108,6 +108,7 @@ class APIClient:
         query: str,
         session_id: Optional[str] = None,
         top_k: int = 5,
+        persona_display_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Send a chat message and get response."""
         try:
@@ -118,6 +119,8 @@ class APIClient:
             }
             if session_id:
                 payload["session_id"] = session_id
+            if persona_display_name:
+                payload["persona_display_name"] = persona_display_name
             
             response = requests.post(
                 f"{self.base_url}/v1/chat",

@@ -23,6 +23,7 @@ class ChatRequest(BaseModel):
     query: str
 
     session_id: Optional[str] = None
+    persona_display_name: Optional[str] = None
     attachments: List[Attachment] = Field(default_factory=list)
 
     top_k: int = 5
