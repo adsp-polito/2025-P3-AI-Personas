@@ -1,0 +1,22 @@
+"""Shared data models for fact data extraction."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+
+@dataclass
+class PageImage:
+    page_number: int  # 1-based
+    image_path: Path
+    width: int
+    height: int
+
+
+@dataclass
+class PageExtractionResult:
+    page_number: int
+    markdown_content: str
+    error: Optional[str] = None

@@ -6,6 +6,51 @@
 
 Applied Data Science Project
 
+## Quickstart (local runnable demo)
+
+```bash
+make install
+python scripts/run_chat.py list-personas
+python scripts/run_chat.py chat --persona-id basic-traditional
+```
+
+## REST API (FastAPI)
+
+```bash
+make install
+python scripts/run_api.py
+```
+
+- Swagger UI: `http://localhost:8000/docs`
+- OpenAPI JSON: `http://localhost:8000/openapi.json`
+
+Advanced local run options:
+
+```bash
+# Uvicorn runner (supports --reload)
+python scripts/run_api.py --mode uvicorn --reload
+
+# Direct import (useful for debugging; no reload)
+python scripts/run_api.py --mode direct --debug
+```
+
+Environment variables (optional):
+- `ADSP_API_RUN_MODE`: `uvicorn` (default) or `direct`
+- `ADSP_API_HOST`, `ADSP_API_PORT`
+- `ADSP_API_RELOAD`: `true`/`false` (uvicorn mode only)
+- `ADSP_API_DEBUG`: `true`/`false`
+- `ADSP_API_LOG_LEVEL`: e.g. `info`, `debug`
+
+Optional (use an OpenAI-compatible LLM backend like vLLM instead of the stub generator):
+
+```bash
+export ADSP_LLM_BACKEND=openai
+export ADSP_LLM_BASE_URL=http://localhost:8000/v1
+export ADSP_LLM_MODEL=<your-model>
+export ADSP_LLM_API_KEY=EMPTY
+python scripts/run_chat.py chat --persona-id basic-traditional
+```
+
 ## Project Organization
 
 ```

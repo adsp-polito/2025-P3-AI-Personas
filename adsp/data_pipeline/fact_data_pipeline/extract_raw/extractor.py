@@ -1,0 +1,178 @@
+"""LLM-based page extractor using an OpenAI-compatible client."""
+
+from __future__ import annotations
+
+import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, List, Optional, Sequence
+
+from loguru import logger
+
+from .config import FactDataExtractionConfig
+from .models import PageExtractionResult, PageImage
+from .prompts import SYSTEM_PROMPT
+from .utils import encode_image_base64
+
+
+class VLLMOpenAIExtractor:
+    def __init__(self, config: FactDataExtractionConfig):
+        try:
+            from openai import OpenAI  # type: ignore
+        except ImportError as exc:  # pragma: no cover - import guard
+            raise ImportError(
+                "openai client is required for fact data extraction. "
+                "Install with `pip install openai`."
+            ) from exc
+
+        self.client = OpenAI(base_url=config.vllm_base_url, api_key=config.vllm_api_key)
+        self.model = config.vllm_model
+        self.temperature = config.temperature
+        self.top_p = config.top_p
+        self.max_tokens = config.max_tokens
+        self.response_timeout = config.response_timeout
+        self.max_retries = config.max_retries
+        self.backoff_seconds = config.backoff_seconds
+        self.max_concurrent = max(1, config.max_concurrent_requests)
+        self.context_window = max(0, getattr(config, "context_window", 0))
+        self.max_image_bytes = getattr(config, "max_image_bytes", None)
+        if not self.model:
+            raise ValueError(
+                "Set VLLM_MODEL to the OpenAI-compatible vision model name (e.g., llava)."
+            )
+
+    def extract_pages(
+        self,
+        pages: Sequence[PageImage],
+        on_result: Optional[Callable[[PageExtractionResult], None]] = None,
+        all_pages: Optional[Sequence[PageImage]] = None,
+        context_window: Optional[int] = None,
+    ) -> List[PageExtractionResult]:
+        """
+        It orchestrates the extraction for a sequence of pages.
+        """
+        if not pages:
+            return []
+        all_pages = all_pages or pages
+        window = self.context_window if context_window is None else max(0, context_window)
+        page_lookup = {p.page_number: p for p in all_pages}
+        results: List[PageExtractionResult] = []
+        """
+        It uses a ThreadPoolExecutor to send requests to the VLLM concurrently, up to the max_concurrent_requests limit
+        specified in the config. This significantly speeds up the process when there are many pages to extract. It calls
+        _extract_single_page for each page
+        """
+        with ThreadPoolExecutor(max_workers=self.max_concurrent) as executor:
+            future_map = {
+                executor.submit(
+                    self._extract_single_page,
+                    page,
+                    self._build_context_pages(page, page_lookup, window),
+                ): page
+                for page in pages
+            }
+            for future in as_completed(future_map):
+                result = future.result()
+                results.append(result)
+                if on_result:
+                    try:
+                        on_result(result)
+                    except Exception as exc:  # pragma: no cover - defensive logging
+                        logger.warning(
+                            f"Failed to handle on_result for page {result.page_number}: {exc}"
+                        )
+        return sorted(results, key=lambda r: r.page_number)
+
+    def _extract_single_page(
+        self, page: PageImage, context_pages: Sequence[PageImage]
+    ) -> PageExtractionResult:
+        """It handles extraction for a single page"""
+        last_error: Optional[str] = None
+        raw_text = ""
+        total_attempts = max(1, self.max_retries + 1)
+        for attempt in range(1, total_attempts + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": self._build_user_content(page, context_pages),
+                        },
+                    ],
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    max_tokens=self.max_tokens,
+                    timeout=self.response_timeout,
+                )
+                raw_text = response.choices[0].message.content or ""
+                if not raw_text or not raw_text.strip():
+                    raise ValueError("Model returned empty response.")
+                return PageExtractionResult(
+                    page_number=page.page_number,
+                    markdown_content=raw_text,
+                    error=None,
+                )
+            except Exception as exc:  # pragma: no cover - external call
+                last_error = str(exc)
+                logger.warning(
+                    (
+                        f"Extraction failed for page {page.page_number} "
+                        f"(attempt {attempt}/{total_attempts}): {exc}"
+                    )
+                )
+                if attempt >= total_attempts:
+                    break
+                time.sleep(self.backoff_seconds * attempt)
+
+        return PageExtractionResult(
+            page_number=page.page_number,
+            markdown_content=raw_text,
+            error=last_error,
+        )
+
+
+    @staticmethod
+    def _build_context_pages(
+        page: PageImage, page_lookup: dict[int, PageImage], window: int
+    ) -> List[PageImage]:
+        """
+        This method constructs the complex payload for the "user" message in the API call. It combines a text preface with
+        multiple image URLs (the primary page and its context pages), all encoded in base64.
+        """
+        if window <= 0:
+            return [page]
+        neighbors = [page.page_number]
+        for offset in range(1, window + 1):
+            for candidate in (page.page_number - offset, page.page_number + offset):
+                if candidate in page_lookup:
+                    neighbors.append(candidate)
+        ordered = [page.page_number] + sorted(
+            {num for num in neighbors if num != page.page_number}
+        )
+        return [page_lookup[num] for num in ordered]
+
+    def _image_content(self, page: PageImage) -> dict:
+        encoded_image, mime_type = encode_image_base64(
+            page.image_path,
+            max_bytes=self.max_image_bytes,
+        )
+        mime = mime_type or "image/png"
+        return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{encoded_image}"}}
+
+    def _build_user_content(
+        self, primary_page: PageImage, context_pages: Sequence[PageImage]
+    ) -> List[dict]:
+        preface = (
+            "Extract and convert to Markdown the primary page below. "
+            f"The primary page number is {primary_page.page_number}. "
+            "Use the other pages only as context to understand cross-page continuity. "
+            "Return Markdown for the primary page only."
+        )
+        content: List[dict] = [{"type": "text", "text": preface}]
+        for ctx_page in context_pages:
+            label = "Primary page" if ctx_page.page_number == primary_page.page_number else "Context page"
+            content.append({"type": "text", "text": f"{label} #{ctx_page.page_number}"})
+            content.append(self._image_content(ctx_page))
+        return content

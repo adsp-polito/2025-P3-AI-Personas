@@ -21,4 +21,16 @@ ruff
 scikit-learn
 tqdm
 typer
+mineru
+ultralytics
+doclayout-yolo
+ftfy
+dill
+shapely
+pyclipper
+omegaconf
+langchain-text-splitters
+fastapi
+uvicorn[standard]
+streamlit
 -e .
