@@ -26,9 +26,9 @@ def _default_questions_path() -> Path:
 
 
 def _default_evaluations_path() -> Path:
-    ground_truth_dir = REPO_ROOT / "data/evaluation/authenticity/ground_truth"
-    if ground_truth_dir.exists() and any(ground_truth_dir.glob("*.json")):
-        return ground_truth_dir
+    evaluation_dir = REPO_ROOT / "data/evaluation/authenticity/system_output"
+    if evaluation_dir.exists() and any(evaluation_dir.glob("*.json")):
+        return evaluation_dir
     return REPO_ROOT / "data/evaluation/authenticity/system_output/generated_responses.json"
 
 
