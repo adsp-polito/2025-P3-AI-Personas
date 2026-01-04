@@ -70,8 +70,12 @@ def render_sidebar(client: APIClient):
             
             with st.container():
                 if st.button(button_label, key=f"persona_{persona_id}", width="stretch"):
-                    # Create new session with this persona
-                    create_new_session(persona_id, persona_name)
+                    # Show name input dialog
+                    st.session_state.show_name_input = True
+                    st.session_state.selected_persona_for_name = {
+                        "persona_id": persona_id,
+                        "persona_name": persona_name
+                    }
                     st.rerun()
                 
                 if summary_bio:
@@ -89,7 +93,8 @@ def render_sidebar(client: APIClient):
             for session_id, session in st.session_state.chat_sessions.items():
                 is_active = st.session_state.active_session_id == session_id
                 
-                session_label = f"{'✓' if is_active else '○'} {session.persona_name[:15]}..."
+                display_text = session.display_name[:15] + ("..." if len(session.display_name) > 15 else "")
+                session_label = f"{'✓' if is_active else '○'} {display_text}"
                 msg_count = len(session.messages)
                 
                 col1, col2 = st.columns([3, 1])

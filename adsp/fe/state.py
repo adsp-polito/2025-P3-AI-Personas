@@ -22,6 +22,7 @@ class ChatSession:
     session_id: str
     persona_id: str
     persona_name: str
+    display_name: str
     messages: List[ChatMessage] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 
@@ -64,6 +65,12 @@ def initialize_session_state():
     
     if "pending_query" not in st.session_state:
         st.session_state.pending_query = {}
+    
+    if "show_name_input" not in st.session_state:
+        st.session_state.show_name_input = False
+    
+    if "selected_persona_for_name" not in st.session_state:
+        st.session_state.selected_persona_for_name = None
 
 
 def get_active_session() -> Optional[ChatSession]:
@@ -74,7 +81,7 @@ def get_active_session() -> Optional[ChatSession]:
     return None
 
 
-def create_new_session(persona_id: str, persona_name: str) -> str:
+def create_new_session(persona_id: str, persona_name: str, display_name: str = None) -> str:
     """Create a new chat session and return its ID."""
     from uuid import uuid4
     
@@ -83,6 +90,7 @@ def create_new_session(persona_id: str, persona_name: str) -> str:
         session_id=session_id,
         persona_id=persona_id,
         persona_name=persona_name,
+        display_name=display_name or persona_name,
     )
     st.session_state.chat_sessions[session_id] = session
     st.session_state.active_session_id = session_id

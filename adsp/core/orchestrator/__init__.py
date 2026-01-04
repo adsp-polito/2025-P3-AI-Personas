@@ -203,6 +203,7 @@ class Orchestrator:
             query=normalized,
             context=filtered_retrieved.context,
             history=filtered_history,
+            display_name=request.persona_display_name,
         )
         logger.debug(
             "orchestrator.build_prompt persona_id={} prompt_chars={} ms={:.2f}",

@@ -10,6 +10,55 @@ from adsp.fe.state import (
 from adsp.fe.components.sidebar import render_sidebar
 from adsp.fe.components.messages import render_message, render_citations
 
+def render_name_input_dialog():
+    """Render dialog for entering custom persona name."""
+    
+    persona_info = st.session_state.selected_persona_for_name
+    if not persona_info:
+        st.session_state.show_name_input = False
+        st.rerun()
+        return
+    
+    persona_name = persona_info.get("persona_name", "Persona")
+    
+    st.html('<div class="main-header">Lavazza AI Personas</div>')
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(f"### Start Chat with {persona_name}")
+        st.markdown("Give your assistant a custom name for this session:")
+        
+        with st.form("name_input_form", clear_on_submit=False):
+            custom_name = st.text_input(
+                "Assistant Name",
+                value=persona_name,
+                placeholder=f"e.g., {persona_name}",
+                help="This name will be displayed throughout your chat session",
+                max_chars=50,
+            )
+            
+            col_submit, col_cancel = st.columns(2)
+            with col_submit:
+                submit = st.form_submit_button("Start Chat", type="primary", width="stretch")
+            with col_cancel:
+                cancel = st.form_submit_button("Cancel", width="stretch")
+            
+            if submit:
+                name_to_use = custom_name.strip() if custom_name.strip() else persona_name
+                create_new_session(
+                    persona_info["persona_id"],
+                    persona_info["persona_name"],
+                    name_to_use
+                )
+                st.session_state.show_name_input = False
+                st.session_state.selected_persona_for_name = None
+                st.rerun()
+            
+            if cancel:
+                st.session_state.show_name_input = False
+                st.session_state.selected_persona_for_name = None
+                st.rerun()
 
 def render_chat_page():
     """Render the main chat interface."""
@@ -23,6 +72,11 @@ def render_chat_page():
     
     # Render sidebar
     render_sidebar(client)
+    
+    # Show name input dialog if needed
+    if st.session_state.get("show_name_input", False):
+        render_name_input_dialog()
+        return
     
     # Main chat area
     st.html('<div class="main-header">Lavazza AI Personas</div>')
@@ -49,7 +103,7 @@ def render_chat_tab(client: APIClient, active_session):
     # Display session info
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
-        st.markdown(f"**Chatting with:** {active_session.persona_name}")
+        st.markdown(f"**Chatting with:** {active_session.display_name}")
     # with col2:
         # st.markdown(f"**Session:** {active_session.session_id[:8]}...")
     with col3:
@@ -90,6 +144,7 @@ def render_chat_tab(client: APIClient, active_session):
                     query=pending["query"],
                     session_id=session_id,
                     top_k=pending.get("top_k", 5),
+                    persona_display_name=pending.get("persona_display_name"),
                 )
             
             if response:
@@ -150,7 +205,7 @@ def render_chat_tab(client: APIClient, active_session):
             submit = st.form_submit_button("Send", width="stretch")
         with col3:
             if st.form_submit_button("New Chat", width="stretch"):
-                create_new_session(active_session.persona_id, active_session.persona_name)
+                create_new_session(active_session.persona_id, active_session.persona_name, active_session.display_name)
                 st.rerun()
         
         if submit and user_input.strip():
@@ -168,10 +223,16 @@ def render_persona_info_tab(client: APIClient, active_session):
         system_prompt = client.get_system_prompt(persona_id)
     
     if profile:
-        # Display persona profile
+        col1, col2 = st.columns(2)
+        with col1:
+            if active_session.display_name != active_session.persona_name:
+                st.markdown(f"**Name:** {active_session.display_name}")
+            else:
+                st.markdown(f"**Name:** {active_session.persona_name}")
         
-        if profile.get("persona_name"):
-            st.markdown(f"**Name:** {profile['persona_name']}")
+        with col2:
+            if profile.get('persona_name'):
+                st.markdown(f"**Customer Segment:** {profile['persona_name']}")
         
         # Display style profile if available
         style_profile = profile.get("style_profile")
@@ -231,6 +292,7 @@ def handle_chat_submission(client: APIClient, session_id: str, user_input: str):
         "persona_id": session.persona_id,
         "query": user_input,
         "top_k": st.session_state.top_k,
+        "persona_display_name": session.display_name,
     }
     
     # Rerun to show user message immediately
