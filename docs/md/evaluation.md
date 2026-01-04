@@ -206,12 +206,8 @@ Manually extract and verify statistics from 20-30 test pages (focus on Curious C
       "context": "female percentage in segment"
     },
     {
-      "value": "48%",
-      "context": "male percentage in segment"
-    },
-    {
-      "value": "20",
-      "context": "household size of 1"
+      "value": "Ground Coffee: 79, Caps (NCC): 104, Coffee Beans: 206, Caps (NC): 79, Instant Coffee: 49, Paper Pods: 91",
+      "context": "Consumption index of curious connoisseurs"
     }
   ]
 }
@@ -404,14 +400,14 @@ Use the system to generate responses for the persona to all test questions.
 
 1. **Expert Authenticity Score**
    ```
-   Average rating across all expert evaluations (1-5 scale)
+   Average authenticity rating across all expert evaluations (1-5 scale)
    ```
 
 2. **Style Alignment Score**
    ```
-   Percentage of responses matching expected style profile
+   Average style alignment rating across all expert evaluations (1-5 scale)
    ```
 3. **Factual Grounding Score**
    ```
-    Percentage of factually accurate responses
+    Average factual grounding rating across all expert evaluations (1-5 scale)
    ```
