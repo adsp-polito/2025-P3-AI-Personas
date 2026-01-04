@@ -105,6 +105,7 @@ def render_sidebar(client: APIClient):
                         width="stretch",
                     ):
                         st.session_state.active_session_id = session_id
+                        st.session_state.show_name_input = False
                         st.rerun()
                 
                 with col2:
