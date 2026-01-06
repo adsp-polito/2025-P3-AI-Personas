@@ -97,3 +97,34 @@ def test_retrieved_context_with_citations():
     assert context.citations[0].indicator_id == "ind_1"
     assert context.raw["source"] == "test"
 
+
+def test_chat_response_minimal():
+    """ChatResponse should accept minimal required fields."""
+    resp = ChatResponse(persona_id="p1", answer="Hello there")
+    assert resp.persona_id == "p1"
+    assert resp.answer == "Hello there"
+    assert resp.context == ""
+    assert resp.citations == []
+    assert resp.tool_calls == []
+
+
+def test_chat_response_with_citations():
+    """ChatResponse should store citations and context."""
+    citations = [Citation(indicator_id="price", score=0.95)]
+    resp = ChatResponse(
+        persona_id="p1",
+        answer="The price is low.",
+        context="Price range is low.",
+        citations=citations,
+    )
+    assert len(resp.citations) == 1
+    assert resp.context == "Price range is low."
+
+
+def test_attachment_defaults():
+    """Attachment should have sensible defaults."""
+    att = Attachment()
+    assert att.type == "other"
+    assert att.name is None
+    assert att.mime_type is None
+    assert att.payload is None
