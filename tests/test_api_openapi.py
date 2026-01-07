@@ -1,3 +1,10 @@
+"""
+Smoke test to ensure that the public REST API contract is preserved.
+
+This test checks that all expected OpenAPI paths are present.
+It does NOT validate request/response schemas or business logic.
+"""
+
 import pytest
 
 
@@ -12,6 +19,8 @@ def test_openapi_paths_exist():
     schema = app.openapi()
     paths = schema.get("paths", {})
 
+    # Minimal contract check: these endpoints must exist and be exposed
+    # to avoid breaking clients when refactoring internal logic.
     expected = {
         "/health",
         "/v1/auth/register",

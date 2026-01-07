@@ -1,3 +1,10 @@
+"""
+Contract test for Orchestrator: it should filter both conversation history
+and retrieved context to keep only what is relevant to the current query.
+
+This test focuses on selection/filtering behavior, not on answer quality.
+"""
+
 from dataclasses import dataclass
 
 from adsp.core.context_filter import ConversationContextFilter
