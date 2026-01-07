@@ -1,3 +1,10 @@
+"""
+Smoke tests for frontend authentication and basic QA flow.
+
+These tests focus on high-level behavior and do not validate
+model quality or detailed response content.
+"""
+
 from adsp.app import AuthService, QAService
 from adsp.fe import ChatFrontend
 
