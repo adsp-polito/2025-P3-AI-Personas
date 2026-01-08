@@ -6,50 +6,199 @@
 
 Applied Data Science Project
 
-## Quickstart (local runnable demo)
+## Description
+
+The **Lavazza AI Personas** project transforms static customer segmentation studies into dynamic, conversational AI agents that authentically represent Lavazza's customer segments. This system serves as a next-generation consumer insights platform for market research, idea validation, and strategic decision-making.
+
+### Key Features
+
+- **Authentic Personality**: AI personas that embody specific customer segments with consistent tone, style, and values
+- **Factual Grounding**: RAG-based system that prevents hallucinations by grounding responses in Lavazza's proprietary data
+- **Critical Thinking**: Personas provide honest, critical feedback rather than generic positive responses
+- **Transparency**: Clear source attribution showing whether information comes from internal documentation or external sources
+- **Multimodal Support**: Process text, images, and PDF documents (e.g., packaging designs, concept notes)
+- **Virtual Focus Groups**: Interact with multiple personas simultaneously for comprehensive feedback
+
+## Getting Started
+
+### Installation
 
 ```bash
 make install
-python scripts/run_chat.py list-personas
-python scripts/run_chat.py chat --persona-id basic-traditional
 ```
 
-## REST API (FastAPI)
+### Data Extraction Pipelines
+
+#### 1. Persona Extraction Pipeline
+
+Extract persona indicators (demographics, behaviors, values) from PDF segmentation studies:
 
 ```bash
-make install
+python scripts/run_persona_extraction.py \
+  --pdf-path data/raw/segmentation_study.pdf \
+  --page-range 1,50 \
+  --vllm-base-url http://localhost:8000/v1 \
+  --vllm-model mistralai/mistral-medium-3-instruct \
+  --generate-reasoning-profiles
+```
+
+Key options:
+- `--pdf-path`: Path to segmentation study PDF
+- `--page-range`: Pages to process (1-based, inclusive)
+- `--vllm-base-url`: OpenAI-compatible API endpoint
+- `--vllm-model`: Vision model for extraction
+- `--generate-reasoning-profiles`: Generate style/value/guardrail profiles
+- `--no-cache`: Force re-extraction (ignore cached responses)
+
+Outputs:
+- `data/interim/personas/personas.json`: Merged persona data
+- `data/interim/personas/individual/{persona_id}.json`: Individual persona files
+- `data/interim/personas/common_traits/{persona_id}.json`: Reasoning profiles
+
+#### 2. Fact Extraction Pipeline
+
+Convert PDF pages to structured markdown for RAG indexing:
+
+```bash
+python scripts/run_fact_data_extraction.py \
+  --pdf-path data/raw/segmentation_study.pdf \
+  --page-range 1,100 \
+  --vllm-base-url http://localhost:8000/v1 \
+  --vllm-model mistralai/mistral-large-3-675b-instruct-2512
+```
+
+Key options:
+- `--pdf-path`: Path to source PDF
+- `--page-range`: Pages to extract (1-based, inclusive)
+- `--context-window`: Adjacent pages for context (default: 0)
+
+Outputs:
+- `data/interim/fact_data/{doc_id}/pages/`: Per-page markdown files
+- `data/interim/fact_data/{doc_id}/qa_report.txt`: Quality assurance report
+
+#### 3. Index Fact Data for RAG
+
+Index extracted facts into the vector database:
+
+```bash
+python scripts/index_fact_data.py \
+  --fact-data-dir data/interim/fact_data/segmentation_study \
+  --vector-db-path data/processed/vector_store
+```
+
+### Running the Application
+
+#### Backend API
+
+Start the FastAPI backend server:
+
+```bash
 python scripts/run_api.py
 ```
 
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
-Advanced local run options:
+Advanced options:
 
 ```bash
-# Uvicorn runner (supports --reload)
+# Uvicorn with auto-reload
 python scripts/run_api.py --mode uvicorn --reload
 
-# Direct import (useful for debugging; no reload)
+# Direct mode for debugging
 python scripts/run_api.py --mode direct --debug
 ```
 
-Environment variables (optional):
+Environment variables:
 - `ADSP_API_RUN_MODE`: `uvicorn` (default) or `direct`
-- `ADSP_API_HOST`, `ADSP_API_PORT`
+- `ADSP_API_HOST`, `ADSP_API_PORT`: Host and port configuration
 - `ADSP_API_RELOAD`: `true`/`false` (uvicorn mode only)
 - `ADSP_API_DEBUG`: `true`/`false`
-- `ADSP_API_LOG_LEVEL`: e.g. `info`, `debug`
+- `ADSP_API_LOG_LEVEL`: `info`, `debug`, etc.
 
-Optional (use an OpenAI-compatible LLM backend like vLLM instead of the stub generator):
+#### Frontend UI
+
+Launch the Streamlit frontend:
+
+```bash
+python scripts/run_frontend.py
+```
+
+The frontend will be available at `http://localhost:8501`
+
+#### LLM Backend Configuration
+
+To use an OpenAI-compatible LLM backend (e.g., vLLM):
 
 ```bash
 export ADSP_LLM_BACKEND=openai
 export ADSP_LLM_BASE_URL=http://localhost:8000/v1
-export ADSP_LLM_MODEL=<your-model>
+export ADSP_LLM_MODEL=mistralai/mistral-small-24b-instruct
 export ADSP_LLM_API_KEY=EMPTY
+```
+
+### Quickstart Demo (CLI)
+
+Test personas via command line:
+
+```bash
+python scripts/run_chat.py list-personas
 python scripts/run_chat.py chat --persona-id basic-traditional
 ```
+
+## Evaluation Results
+
+The system has been evaluated across four key dimensions using Mistral models:
+
+### 1. Persona Extraction
+
+**Model**: `mistralai/mistral-medium-3-instruct`  
+**Dataset**: 23 pages (Curious Connoisseurs segment), 1,051 manually validated metrics
+
+| Metric | Score | Interpretation |
+|--------|-------|----------------|
+| Persona Detection Rate | 100% | All personas correctly identified (23/23) |
+| Metrics Recall | 95.30% | Very high coverage of ground-truth metrics (1002/1051) |
+| Metrics Precision | 96.80% | Minimal noise in extracted metrics (1002/1035) |
+
+### 2. Fact Extraction
+
+**Model**: `mistralai/mistral-large-3-675b-instruct-2512`  
+**Dataset**: 23 pages, 467 validated metric snippets
+
+| Metric | Score | Interpretation |
+|--------|-------|----------------|
+| Exact Match Accuracy | 97% | High extraction accuracy with minimal deviation |
+
+
+### 3. Retrieval Relevance
+
+**Embedding Model**: `sentence-transformers/all-mpnet-base-v2`  
+**RAG Setup**: 222-page document, 712 chunks (1,200 chars, 50 overlap)
+
+| Metric | Score | Interpretation |
+|--------|-------|----------------|
+| Precision@3 | 58.10% | Top-3 results are moderately relevant |
+| Precision@10 | 54.20% | Balanced precision maintained |
+| Recall@3 | 16.70% | Limited coverage with minimal context |
+| Recall@10 | 45.10% | Balanced trade-off |
+| **Recall@20** | **94.10%** | **Near-complete retrieval of relevant content** |
+
+**Key Finding**: Recall@20 achieves 94.10%, indicating that expanding the retrieval window to 20 chunks provides near-complete coverage of relevant information while maintaining reasonable precision (55.50%).
+
+### 4. Persona Authenticity
+
+**Models**: `mistralai/mistral-medium-3-instruct` (filter), `mistralai/mistral-small-24b-instruct` (generation)  
+**RAG Setup**: 222-page document, 712 chunks (1,200 chars, 50 overlap)  
+**Dataset**: 31 evaluation questions (Curious Connoisseurs segment)
+
+| Metric | Score | Interpretation |
+|--------|-------|----------------|
+| Expert Authenticity Score | 3.90 / 5 | Persona behavior is largely authentic |
+| Style Alignment Score | 3.74 / 5 | Style is mostly consistent |
+| Factual Grounding Score | 3.67 / 5 | Responses are generally grounded |
+
+For detailed evaluation methodology and results, see `reports/evaluation/`.
 
 ## Project Organization
 
