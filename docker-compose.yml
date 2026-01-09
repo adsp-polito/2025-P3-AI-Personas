@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: adsp-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ADSP_API_HOST=0.0.0.0
+      - ADSP_API_PORT=8000
+      - ADSP_LLM_BACKEND=${ADSP_LLM_BACKEND:-stub}
+      - ADSP_LLM_BASE_URL=${ADSP_LLM_BASE_URL:-}
+      - ADSP_LLM_MODEL=${ADSP_LLM_MODEL:-}
+      - ADSP_LLM_API_KEY=${ADSP_LLM_API_KEY:-EMPTY}
+      - ADSP_CONTEXT_FILTER_ENABLED=${ADSP_CONTEXT_FILTER_ENABLED:-true}
+      - ADSP_CONTEXT_FILTER_BACKEND=${ADSP_CONTEXT_FILTER_BACKEND:-heuristic}
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    name: adsp-network

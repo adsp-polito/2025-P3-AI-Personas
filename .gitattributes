@@ -1,0 +1,33 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force LF for all text files
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Denote binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.pyc binary
+*.pyo binary
+*.so binary
+*.dylib binary
+*.dll binary
+
+# Export ignore
+.gitattributes export-ignore
+.gitignore export-ignore
+.github/ export-ignore
+tests/ export-ignore
+docs/ export-ignore
+notebooks/ export-ignore
