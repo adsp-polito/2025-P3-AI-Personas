@@ -21,7 +21,7 @@
 ## Results
 
 | Metric                    | Score    | Interpretation                                       |
-| ------------------------- | -------- | ---------------------------------------------------- |
-| Expert Authenticity Score | 3.90 / 5 | Persona behavior is largely authentic                |
-| Style Alignment Score     | 3.74 / 5 | Style is mostly consistent, with minor persona drift |
-| Factual Grounding Score   | 3.67 / 5 | Responses are generally grounded                     |
+| ------------------------- |----------| ---------------------------------------------------- |
+| Expert Authenticity Score | 4.00 / 5 | Persona behavior is largely authentic                |
+| Style Alignment Score     | 4.32 / 5 | Style is mostly consistent, with minor persona drift |
+| Factual Grounding Score   | 3.77 / 5 | Responses are generally grounded                     |
