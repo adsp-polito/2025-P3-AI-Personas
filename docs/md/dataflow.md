@@ -1,4 +1,4 @@
-# How a Question Becomes an Answer (Plain Language)
+# How a Question Becomes an Answer
 
 - Question asked: "What is your coffee behaviour?"
 - Persona used: Curious Connoisseurs
