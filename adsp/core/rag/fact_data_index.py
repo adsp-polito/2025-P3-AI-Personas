@@ -8,20 +8,26 @@ from typing import List, Optional
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
-from adsp.core.rag.persona_index import HashEmbeddings
 from adsp.core.types import Citation, RetrievedContext
 from adsp.data_pipeline.fact_data_pipeline.rag.indicator import (
     FactDataRAG,
     documents_to_context_prompt,
 )
 
+DEFAULT_EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+
+
+def _default_embeddings() -> Embeddings:
+    return HuggingFaceEmbeddings(model_name=DEFAULT_EMBEDDING_MODEL_NAME)
+
 
 @dataclass
 class FactDataRAGIndex:
     """In-memory similarity search over fact-data markdown chunks."""
 
-    embeddings: Embeddings = field(default_factory=HashEmbeddings)
+    embeddings: Embeddings = field(default_factory=_default_embeddings)
     rag: FactDataRAG = field(init=False)
     indexed_chunk_ids: List[str] = field(default_factory=list)
 
@@ -100,10 +106,9 @@ def build_fact_data_index_from_markdown(
     if not _safe_dir_has_files(markdown_dir, pattern=pattern):
         return None
 
-    index = FactDataRAGIndex(embeddings=embeddings or HashEmbeddings())
+    index = FactDataRAGIndex(embeddings=embeddings or _default_embeddings())
     index.index_markdown_directory(markdown_dir, pattern=pattern)
     return index
 
 
 __all__ = ["FactDataRAGIndex", "build_fact_data_index_from_markdown"]
-
