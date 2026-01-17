@@ -209,8 +209,8 @@ def _add_evaluate_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--k-values",
         type=_parse_k_values,
-        default=_parse_k_values("3,5,10,20"),
-        help="Comma-separated list of K values for precision/recall (e.g., 3,5,10,20).",
+        default=_parse_k_values("3,5,10,20,25"),
+        help="Comma-separated list of K values for precision/recall (e.g., 3,5,10,20,25).",
     )
 
 
