@@ -9,6 +9,7 @@ from typing import Dict, Iterable, List, Optional
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from adsp.core.types import Citation, RetrievedContext
 from adsp.data_pipeline.persona_data_pipeline.rag.indicator import (
@@ -16,6 +17,12 @@ from adsp.data_pipeline.persona_data_pipeline.rag.indicator import (
     documents_to_context_prompt,
 )
 from adsp.data_pipeline.schema import PersonaProfileModel
+
+DEFAULT_EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+
+
+def _default_embeddings() -> Embeddings:
+    return HuggingFaceEmbeddings(model_name=DEFAULT_EMBEDDING_MODEL_NAME)
 
 
 class HashEmbeddings(Embeddings):
@@ -59,7 +66,7 @@ class HashEmbeddings(Embeddings):
 class PersonaRAGIndex:
     """Builds and queries per-persona indicator vector stores."""
 
-    embeddings: Embeddings = field(default_factory=HashEmbeddings)
+    embeddings: Embeddings = field(default_factory=_default_embeddings)
     _indexes: Dict[str, PersonaIndicatorRAG] = field(default_factory=dict)
 
     def index_personas(self, personas: Iterable[PersonaProfileModel]) -> None:

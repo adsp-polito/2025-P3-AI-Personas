@@ -9,12 +9,31 @@ from typing import Iterable, List
 from langchain_core.documents import Document
 # an abstract base class for embedding models
 from langchain_core.embeddings import Embeddings
-# import a basic, in-memory vector database implementation provided by LangChain, and an interface for retrieving
-# Documents from a vector store based on query
-from langchain_core.vectorstores import InMemoryVectorStore, VectorStoreRetriever
+# vector store interfaces for similarity search and retrieval
+from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from loguru import logger
 
 from .chunker import FactDataMarkdownChunker
+
+
+def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
+    try:
+        from langchain_community.docstore.in_memory import InMemoryDocstore
+        from langchain_community.vectorstores import FAISS
+        import faiss  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
+        ) from exc
+
+    dim = len(embeddings.embed_query("dimension probe"))
+    index = faiss.IndexFlatL2(dim)
+    return FAISS(
+        embedding_function=embeddings,
+        index=index,
+        docstore=InMemoryDocstore(),
+        index_to_docstore_id={},
+    )
 
 
 class FactDataRAG:
@@ -24,12 +43,12 @@ class FactDataRAG:
         self,
         embeddings: Embeddings,
         *,
-        vectorstore: InMemoryVectorStore | None = None,
+        vectorstore: VectorStore | None = None,
         chunk_size: int = 1200,
         chunk_overlap: int = 50,
     ) -> None:
         self.embeddings = embeddings
-        self.vectorstore = vectorstore or InMemoryVectorStore(embedding=embeddings)
+        self.vectorstore = vectorstore or _default_vectorstore(embeddings)
         self.chunker = FactDataMarkdownChunker(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
