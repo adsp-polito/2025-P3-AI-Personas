@@ -32,7 +32,7 @@ def get_embedding_dimension(embeddings: Embeddings) -> int:
     if hasattr(embeddings, 'model') and hasattr(embeddings.model, 'get_sentence_embedding_dimension'):
         return embeddings.model.get_sentence_embedding_dimension()
     
-    # Try accessing client.model for certain embedding types
+    # Try accessing client attribute for certain embedding types
     if hasattr(embeddings, 'client') and hasattr(embeddings.client, 'get_sentence_embedding_dimension'):
         return embeddings.client.get_sentence_embedding_dimension()
     
