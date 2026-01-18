@@ -12,35 +12,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 
 from adsp.data_pipeline.schema import Indicator, PersonaProfileModel, Statement
-
-
-def _get_embedding_dimension(embeddings: Embeddings) -> int:
-    """Get the dimension of the embedding model efficiently.
-    
-    Tries multiple methods in order of efficiency:
-    1. Check for a 'dim' attribute (e.g., HashEmbeddings)
-    2. Check for a 'dimension' attribute
-    3. Check for the underlying model's get_sentence_embedding_dimension() method
-    4. Fall back to probing with a test query (least efficient)
-    """
-    # Try direct dim attribute
-    if hasattr(embeddings, 'dim'):
-        return embeddings.dim
-    
-    # Try dimension attribute
-    if hasattr(embeddings, 'dimension'):
-        return embeddings.dimension
-    
-    # Try SentenceTransformer's method via the model attribute
-    if hasattr(embeddings, 'model') and hasattr(embeddings.model, 'get_sentence_embedding_dimension'):
-        return embeddings.model.get_sentence_embedding_dimension()
-    
-    # Try accessing client.model for certain embedding types
-    if hasattr(embeddings, 'client') and hasattr(embeddings.client, 'get_sentence_embedding_dimension'):
-        return embeddings.client.get_sentence_embedding_dimension()
-    
-    # Fall back to probing (least efficient, but works for any Embeddings implementation)
-    return len(embeddings.embed_query("dimension probe"))
+from adsp.utils.rag import get_embedding_dimension
 
 
 def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
@@ -53,7 +25,7 @@ def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
             "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
         ) from exc
 
-    dim = _get_embedding_dimension(embeddings)
+    dim = get_embedding_dimension(embeddings)
     index = faiss.IndexFlatL2(dim)
     return FAISS(
         embedding_function=embeddings,
