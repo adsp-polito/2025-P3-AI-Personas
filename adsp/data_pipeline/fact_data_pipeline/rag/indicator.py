@@ -15,26 +15,9 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from loguru import logger
 
+from adsp.data_pipeline.embedding_utils import get_embedding_dimension
+
 from .chunker import FactDataMarkdownChunker
-
-
-def _get_embedding_dimension(embeddings: Embeddings) -> int:
-    """Get the dimension of the embedding model.
-    
-    First checks if the embeddings object has a 'dim' attribute.
-    Otherwise, computes it once by embedding a probe string.
-    """
-    # Check if the embeddings object exposes dimension directly
-    if hasattr(embeddings, 'dim'):
-        return embeddings.dim  # type: ignore[attr-defined]
-    
-    # Compute dimension by embedding a probe string
-    # Cache the result on the embeddings object to avoid recomputation
-    if not hasattr(embeddings, '_cached_dimension'):
-        probe_vector = embeddings.embed_query("dimension probe")
-        embeddings._cached_dimension = len(probe_vector)  # type: ignore[attr-defined]
-    
-    return embeddings._cached_dimension  # type: ignore[attr-defined]
 
 
 def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
@@ -47,7 +30,7 @@ def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
             "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
         ) from exc
 
-    dim = _get_embedding_dimension(embeddings)
+    dim = get_embedding_dimension(embeddings)
     index = faiss.IndexFlatL2(dim)
     return FAISS(
         embedding_function=embeddings,
