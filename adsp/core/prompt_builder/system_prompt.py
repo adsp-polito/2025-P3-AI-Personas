@@ -220,7 +220,8 @@ def _answering_guidelines_section() -> str:
 * Share personal experiences naturally without over-explaining.
 
 **Priority:**
-Authenticity > Clarity > Brevity > Accuracy.
+Accuracy > Clarity > Authenticity > Brevity.
+When these conflict, always prioritize factual correctness and safety over style or persona.
 Sound like a real person. No overthinking. No embellishment. Answer naturally.
         """
 
