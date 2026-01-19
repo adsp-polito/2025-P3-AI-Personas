@@ -7,26 +7,30 @@ from typing import Iterable, List
 
 # a fundamental data structure in LangChain to represent a piece of text content along with its metadata
 from langchain_core.documents import Document
+
 # an abstract base class for embedding models
 from langchain_core.embeddings import Embeddings
+
 # vector store interfaces for similarity search and retrieval
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from loguru import logger
+
+from adsp.data_pipeline.embedding_utils import get_embedding_dimension
 
 from .chunker import FactDataMarkdownChunker
 
 
 def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
     try:
+        import faiss  # type: ignore
         from langchain_community.docstore.in_memory import InMemoryDocstore
         from langchain_community.vectorstores import FAISS
-        import faiss  # type: ignore
     except Exception as exc:
         raise RuntimeError(
             "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
         ) from exc
 
-    dim = len(embeddings.embed_query("dimension probe"))
+    dim = get_embedding_dimension(embeddings)
     index = faiss.IndexFlatL2(dim)
     return FAISS(
         embedding_function=embeddings,
