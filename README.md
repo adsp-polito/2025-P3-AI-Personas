@@ -178,13 +178,16 @@ The system has been evaluated across four key dimensions using Mistral models:
 
 | Metric | Score | Interpretation |
 |--------|-------|----------------|
-| Precision@3 | 58.10% | Top-3 results are moderately relevant |
-| Precision@10 | 54.20% | Balanced precision maintained |
-| Recall@3 | 16.70% | Limited coverage with minimal context |
-| Recall@10 | 45.10% | Balanced trade-off |
-| **Recall@20** | **94.10%** | **Near-complete retrieval of relevant content** |
-
-**Key Finding**: Recall@20 achieves 94.10%, indicating that expanding the retrieval window to 20 chunks provides near-complete coverage of relevant information while maintaining reasonable precision (55.50%).
+| Precision@3 | 89.25% | Top-3 results are mostly relevant |
+| Precision@5 | 88.39% | High relevance persists in top 5 |
+| Precision@10 | 86.13% | Strong top-10 relevance with minor noise |
+| Precision@20 | 82.58% | Relevance remains high but dilutes with depth |
+| Precision@25 | 80.90% | Moderate noise beyond top 20 |
+| Recall@3 | 14.87% | Small share of relevant docs in top 3 |
+| Recall@5 | 23.35% | Less than a quarter in top 5 |
+| Recall@10 | 45.98% | Roughly half captured by top 10 |
+| Recall@20 | 82.08% | Most relevant docs retrieved by top 20 |
+| **Recall@25** | **100.00%** | **All relevant docs retrieved by top 25** |
 
 ### 4. Persona Authenticity
 
