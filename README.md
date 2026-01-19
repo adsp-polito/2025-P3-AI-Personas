@@ -19,6 +19,12 @@ The **Lavazza AI Personas** project transforms static customer segmentation stud
 - **Multimodal Support**: Process text, images, and PDF documents (e.g., packaging designs, concept notes)
 - **Virtual Focus Groups**: Interact with multiple personas simultaneously for comprehensive feedback
 
+## Methodology
+
+![Functional diagram](docs/images/functional_diagram.png)
+
+The system runs in two phases. During data ingestion, we extract persona indicators and traits, and extract facts from the source dataset, build a persona registry, and index facts into the RAG store. During the online process, the orchestrator receives a query, retrieves relevant context, conversation history and persona descriptions, assembles the prompt, and calls the LLM to generate a grounded response.
+
 ## Getting Started
 
 ### Installation
