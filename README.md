@@ -197,9 +197,11 @@ The system has been evaluated across four key dimensions using Mistral models:
 
 | Metric | Score | Interpretation |
 |--------|-------|----------------|
-| Expert Authenticity Score | 4.00/ 5 | Persona behavior is largely authentic |
-| Style Alignment Score | 4.32 / 5 | Style is mostly consistent |
-| Factual Grounding Score | 3.77 / 5 | Responses are generally grounded |
+| Expert Authenticity Score | 4.66 / 5 | Persona behavior is highly authentic |
+| Style Alignment Score | 4.74 / 5 | Style is highly consistent, with minimal drift |
+| Factual Grounding Score | 4.44 / 5 | Responses are well grounded |
+
+**Key Finding**: Authenticity, style alignment, and grounding all score above 4.4/5, indicating strong persona fidelity with consistent style and reliable grounding.
 
 For detailed evaluation methodology and results, see `reports/evaluation/`.
 

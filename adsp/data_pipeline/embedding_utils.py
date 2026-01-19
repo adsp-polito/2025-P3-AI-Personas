@@ -10,6 +10,16 @@ if TYPE_CHECKING:
 
 # Cache for embedding dimensions, using weak references to avoid memory leaks
 _dimension_cache: weakref.WeakKeyDictionary[Embeddings, int] = weakref.WeakKeyDictionary()
+_dimension_cache_by_key: dict[tuple[type, str], int] = {}
+
+
+def _make_cache_key(embeddings: "Embeddings") -> tuple[type, str] | None:
+    model_name = getattr(embeddings, "model_name", None)
+    if model_name is None:
+        model_name = getattr(embeddings, "model", None)
+    if isinstance(model_name, str) and model_name:
+        return (type(embeddings), model_name)
+    return None
 
 
 def get_embedding_dimension(embeddings: Embeddings) -> int:
@@ -29,14 +39,25 @@ def get_embedding_dimension(embeddings: Embeddings) -> int:
         return embeddings.dim  # type: ignore[attr-defined]
     
     # Check cache first
-    if embeddings in _dimension_cache:
-        return _dimension_cache[embeddings]
+    try:
+        if embeddings in _dimension_cache:
+            return _dimension_cache[embeddings]
+    except TypeError:
+        pass
+
+    cache_key = _make_cache_key(embeddings)
+    if cache_key is not None and cache_key in _dimension_cache_by_key:
+        return _dimension_cache_by_key[cache_key]
     
     # Compute dimension by embedding a probe string
     probe_vector = embeddings.embed_query("dimension probe")
     dimension = len(probe_vector)
     
     # Cache the result
-    _dimension_cache[embeddings] = dimension
+    try:
+        _dimension_cache[embeddings] = dimension
+    except TypeError:
+        if cache_key is not None:
+            _dimension_cache_by_key[cache_key] = dimension
     
     return dimension

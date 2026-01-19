@@ -126,7 +126,7 @@ class APIClient:
                 f"{self.base_url}/v1/chat",
                 json=payload,
                 headers=self._get_headers(),
-                timeout=30,
+                timeout=(5, 120),  # (connect, read)
             )
             if response.status_code == 200:
                 data = response.json()
