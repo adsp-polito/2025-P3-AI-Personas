@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from langchain_core.embeddings import Embeddings
-from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.vectorstores import VectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from loguru import logger
 
@@ -20,7 +20,7 @@ def run_fact_data_indexing_pipeline(
     chunk_size: int = 1200,
     chunk_overlap: int = 50,
     pattern: str = "page_*.md",
-    vectorstore: Optional[InMemoryVectorStore] = None,
+    vectorstore: Optional[VectorStore] = None,
 ) -> FactDataRAG:
     """
     Run the complete fact data indexing pipeline: chunk markdown files and index into RAG.
@@ -32,7 +32,7 @@ def run_fact_data_indexing_pipeline(
         chunk_size: Maximum chunk size in characters (default: 1200)
         chunk_overlap: Overlap between chunks in characters (default: 50)
         pattern: Glob pattern for markdown files (default: page_*.md)
-        vectorstore: Optional pre-initialized vector store. If None, creates InMemoryVectorStore
+        vectorstore: Optional pre-initialized vector store. If None, uses the default FAISS store
         
     Returns:
         FactDataRAG instance with indexed data ready for search
@@ -57,11 +57,8 @@ def run_fact_data_indexing_pipeline(
         embedding_model = HuggingFaceEmbeddings(model_name=embedding_model_name)
         logger.info("Embedding model loaded")
     
-    # Initialize vector store if not provided
     if vectorstore is None:
-        logger.info("Creating in-memory vector store...")
-        vectorstore = InMemoryVectorStore(embedding=embedding_model)
-        logger.info("Vector store created")
+        logger.info("Using default FAISS vector store...")
     
     # Initialize RAG with chunking parameters
     logger.info("Initializing RAG system with chunker...")

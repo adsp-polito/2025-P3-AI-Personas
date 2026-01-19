@@ -8,11 +8,30 @@ from typing import Iterable, List, Tuple
 from langchain_core.documents import Document
 # an abstract base class for embedding models
 from langchain_core.embeddings import Embeddings
-# import a basic, in-memory vector database implementation provided by LangChain, and an interface for retrieving
-# Documents from a vector store based on query
-from langchain_core.vectorstores import InMemoryVectorStore, VectorStoreRetriever
+# vector store interfaces for similarity search and retrieval
+from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 
 from adsp.data_pipeline.schema import Indicator, PersonaProfileModel, Statement
+
+
+def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
+    try:
+        from langchain_community.docstore.in_memory import InMemoryDocstore
+        from langchain_community.vectorstores import FAISS
+        import faiss  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
+        ) from exc
+
+    dim = len(embeddings.embed_query("dimension probe"))
+    index = faiss.IndexFlatL2(dim)
+    return FAISS(
+        embedding_function=embeddings,
+        index=index,
+        docstore=InMemoryDocstore(),
+        index_to_docstore_id={},
+    )
 
 
 class PersonaIndicatorRAG:
@@ -22,10 +41,10 @@ class PersonaIndicatorRAG:
         self,
         embeddings: Embeddings,
         *,
-        vectorstore: InMemoryVectorStore | None = None,
+        vectorstore: VectorStore | None = None,
     ) -> None:
         self.embeddings = embeddings
-        self.vectorstore = vectorstore or InMemoryVectorStore(embedding=embeddings)
+        self.vectorstore = vectorstore or _default_vectorstore(embeddings)
 
     def index_persona(self, persona: PersonaProfileModel) -> List[str]:
         """Add a persona's indicators to the vector store, so index all indicators of the given persona"""

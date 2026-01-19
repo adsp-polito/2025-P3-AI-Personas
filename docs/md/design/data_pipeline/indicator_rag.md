@@ -47,13 +47,12 @@ Renders a list of `Document` results to a single context string with headers, se
 
 ## Key dependencies / technologies
 
-- `langchain_core.vectorstores.InMemoryVectorStore`
+- `langchain_community.vectorstores.FAISS`
 - `langchain_core.documents.Document`
 - `langchain_core.embeddings.Embeddings`
 
 ## Notes / production hardening
 
-- Swap `InMemoryVectorStore` with a persistent vector store for production.
+- Swap the default FAISS index with a persistent vector store for production.
 - Add metadata filters to enforce persona scoping at retrieval time.
 - Preserve `sources` (doc_id/pages) and emit citations in addition to context text.
-
