@@ -8,7 +8,13 @@ Applied Data Science Project
 
 ## Description
 
-The **Lavazza AI Personas** project transforms static customer segmentation studies into dynamic, conversational AI agents that authentically represent Lavazza's customer segments. This system serves as a next-generation consumer insights platform for market research, idea validation, and strategic decision-making.
+### Objectives
+The **Lavazza AI Personas** project builds an AI platform that enables internal business teams to interact with AI personas representing different market segments, allowing them to explore and test strategies through dynamic, conversational agents. By transforming static customer segmentation studies into authentic AI representations of Lavazza's customer segments, this system serves as a next-generation consumer insights platform for market research, idea validation, and strategic decision-making.
+
+**Key Benefits:**
+- **Accelerated Insights**: Reduce time and resources spent on manual data preprocessing and analysis
+- **Trustworthy Intelligence**: Provide credible, fact-grounded responses backed by Lavazza's proprietary research data
+- **Strategic Focus**: Help teams make more informed, data-driven market strategies with immediate access to customer perspectives
 
 ### Key Features
 
@@ -161,20 +167,20 @@ The system has been evaluated across four key dimensions using Mistral models:
 **Model**: `mistralai/mistral-medium-3-instruct`  
 **Dataset**: 23 pages (Curious Connoisseurs segment), 1,051 manually validated metrics
 
-| Metric | Score | Interpretation |
-|--------|-------|----------------|
-| Persona Detection Rate | 100% | All personas correctly identified (23/23) |
-| Metrics Recall | 95.30% | Very high coverage of ground-truth metrics (1002/1051) |
-| Metrics Precision | 96.80% | Minimal noise in extracted metrics (1002/1035) |
+| Metric                 | Score  | Interpretation                                         |
+| ---------------------- | ------ | ------------------------------------------------------ |
+| Persona Detection Rate | 100%   | All personas correctly identified (23/23)              |
+| Metrics Recall         | 95.30% | Very high coverage of ground-truth metrics (1002/1051) |
+| Metrics Precision      | 96.80% | Minimal noise in extracted metrics (1002/1035)         |
 
 ### 2. Fact Extraction
 
 **Model**: `mistralai/mistral-large-3-675b-instruct-2512`  
 **Dataset**: 23 pages, 467 validated metric snippets
 
-| Metric | Score | Interpretation |
-|--------|-------|----------------|
-| Exact Match Accuracy | 97% | High extraction accuracy with minimal deviation |
+| Metric               | Score | Interpretation                                  |
+| -------------------- | ----- | ----------------------------------------------- |
+| Exact Match Accuracy | 97%   | High extraction accuracy with minimal deviation |
 
 
 ### 3. Retrieval Relevance
@@ -182,18 +188,18 @@ The system has been evaluated across four key dimensions using Mistral models:
 **Embedding Model**: `sentence-transformers/all-mpnet-base-v2`  
 **RAG Setup**: 222-page document, 712 chunks (1,200 chars, 50 overlap)
 
-| Metric | Score | Interpretation |
-|--------|-------|----------------|
-| Precision@3 | 89.25% | Top-3 results are mostly relevant |
-| Precision@5 | 88.39% | High relevance persists in top 5 |
-| Precision@10 | 86.13% | Strong top-10 relevance with minor noise |
-| Precision@20 | 82.58% | Relevance remains high but dilutes with depth |
-| Precision@25 | 80.90% | Moderate noise beyond top 20 |
-| Recall@3 | 14.87% | Small share of relevant docs in top 3 |
-| Recall@5 | 23.35% | Less than a quarter in top 5 |
-| Recall@10 | 45.98% | Roughly half captured by top 10 |
-| Recall@20 | 82.08% | Most relevant docs retrieved by top 20 |
-| **Recall@25** | **100.00%** | **All relevant docs retrieved by top 25** |
+| Metric        | Score       | Interpretation                                |
+| ------------- | ----------- | --------------------------------------------- |
+| Precision@3   | 89.25%      | Top-3 results are mostly relevant             |
+| Precision@5   | 88.39%      | High relevance persists in top 5              |
+| Precision@10  | 86.13%      | Strong top-10 relevance with minor noise      |
+| Precision@20  | 82.58%      | Relevance remains high but dilutes with depth |
+| Precision@25  | 80.90%      | Moderate noise beyond top 20                  |
+| Recall@3      | 14.87%      | Small share of relevant docs in top 3         |
+| Recall@5      | 23.35%      | Less than a quarter in top 5                  |
+| Recall@10     | 45.98%      | Roughly half captured by top 10               |
+| Recall@20     | 82.08%      | Most relevant docs retrieved by top 20        |
+| **Recall@25** | **100.00%** | **All relevant docs retrieved by top 25**     |
 
 ### 4. Persona Authenticity
 
@@ -201,11 +207,11 @@ The system has been evaluated across four key dimensions using Mistral models:
 **RAG Setup**: 222-page document, 712 chunks (1,200 chars, 50 overlap)  
 **Dataset**: 31 evaluation questions (Curious Connoisseurs segment)
 
-| Metric | Score | Interpretation |
-|--------|-------|----------------|
-| Expert Authenticity Score | 4.66 / 5 | Persona behavior is highly authentic |
-| Style Alignment Score | 4.74 / 5 | Style is highly consistent, with minimal drift |
-| Factual Grounding Score | 4.44 / 5 | Responses are well grounded |
+| Metric                    | Score    | Interpretation                                 |
+| ------------------------- | -------- | ---------------------------------------------- |
+| Expert Authenticity Score | 4.66 / 5 | Persona behavior is highly authentic           |
+| Style Alignment Score     | 4.74 / 5 | Style is highly consistent, with minimal drift |
+| Factual Grounding Score   | 4.44 / 5 | Responses are well grounded                    |
 
 **Key Finding**: Authenticity, style alignment, and grounding all score above 4.4/5, indicating strong persona fidelity with consistent style and reliable grounding.
 
