@@ -77,7 +77,7 @@ class FactDataRAG:
     def index_markdown_directory(
         self,
         directory: Path,
-        pattern: str = "page_*.md",
+        pattern: str = "*.md",
     ) -> List[str]:
         """Index all markdown files in a directory."""
         chunks = self.chunker.chunk_directory(directory, pattern)

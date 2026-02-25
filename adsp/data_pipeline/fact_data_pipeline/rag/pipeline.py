@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
@@ -19,7 +19,7 @@ def run_fact_data_indexing_pipeline(
     embedding_model_name: str = "sentence-transformers/all-mpnet-base-v2",
     chunk_size: int = 1200,
     chunk_overlap: int = 50,
-    pattern: str = "page_*.md",
+    pattern: str = "*.md",
     vectorstore: Optional[VectorStore] = None,
 ) -> FactDataRAG:
     """
@@ -31,7 +31,7 @@ def run_fact_data_indexing_pipeline(
         embedding_model_name: HuggingFace model name for embeddings (default: all-mpnet-base-v2)
         chunk_size: Maximum chunk size in characters (default: 1200)
         chunk_overlap: Overlap between chunks in characters (default: 50)
-        pattern: Glob pattern for markdown files (default: page_*.md)
+        pattern: Glob pattern for markdown files (default: *.md, recursive)
         vectorstore: Optional pre-initialized vector store. If None, uses the default FAISS store
         
     Returns:

@@ -8,8 +8,7 @@ pytest.importorskip('langchain_core')
 
 from langchain_core.documents import Document
 
-from adsp.core.rag.fact_data_index import _safe_dir_has_files
-from adsp.core.rag.fact_data_index import build_fact_data_index_from_markdown
+from adsp.core.rag.fact_data_index import _safe_dir_has_files, build_fact_data_index_from_markdown
 from adsp.core.rag.persona_index import HashEmbeddings
 from adsp.data_pipeline.fact_data_pipeline.rag.indicator import (
     documents_to_context_prompt as fact_prompt,
@@ -162,6 +161,14 @@ def test_safe_dir_has_files_respects_pattern(tmp_path: Path):
 
     assert _safe_dir_has_files(tmp_path, pattern='*.txt') is True
     assert _safe_dir_has_files(tmp_path, pattern='*.csv') is False
+
+
+def test_safe_dir_has_files_finds_nested_markdown(tmp_path: Path):
+    nested = tmp_path / 'nested'
+    nested.mkdir()
+    (nested / 'page_1.md').write_text('content', encoding='utf-8')
+
+    assert _safe_dir_has_files(tmp_path, pattern='*.md') is True
 
 
 def test_build_fact_data_index_from_markdown_no_files(tmp_path: Path):

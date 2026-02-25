@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+import re
+from typing import List, Optional
 
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from loguru import logger
 
 
@@ -83,17 +83,24 @@ class FactDataMarkdownChunker:
             
             # Extract page number from filename if not provided
             if page_number is None:
-                # Assuming filename format: page_0001.md
-                try:
-                    page_number = int(file_path.stem.split("_")[-1])
-                except (ValueError, IndexError):
-                    page_number = 0
+                page_number = self._parse_page_number_from_filename(file_path.stem)
             
             return self.chunk_markdown_text(content, file_path.name, page_number)
             
         except Exception as e:
             logger.error(f"Failed to chunk {file_path.name}: {e}")
             return []
+
+    @staticmethod
+    def _parse_page_number_from_filename(stem: str) -> int:
+        """Extract page number from either `page_<n>` or `<hash>_page_<n>` filename stems."""
+        match = re.search(r"(?:^|_)page_(\d+)$", stem)
+        if not match:
+            return 0
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return 0
     
     @staticmethod
     def _remove_markdown_links(text: str) -> str:
@@ -214,7 +221,7 @@ class FactDataMarkdownChunker:
     def chunk_directory(
         self,
         directory: Path,
-        pattern: str = "page_*.md",
+        pattern: str = "*.md",
     ) -> List[Document]:
         """
         Chunk all markdown files in a directory.
@@ -231,7 +238,7 @@ class FactDataMarkdownChunker:
             raise FileNotFoundError(f"Directory not found: {directory}")
         
         all_chunks: List[Document] = []
-        markdown_files = sorted(directory.glob(pattern))
+        markdown_files = sorted(directory.rglob(pattern))
         
         logger.info(f"Chunking {len(markdown_files)} markdown files from {directory}")
         

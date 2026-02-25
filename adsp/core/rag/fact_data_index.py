@@ -34,7 +34,7 @@ class FactDataRAGIndex:
     def __post_init__(self) -> None:
         self.rag = FactDataRAG(self.embeddings)
 
-    def index_markdown_directory(self, directory: Path, *, pattern: str = "page_*.md") -> int:
+    def index_markdown_directory(self, directory: Path, *, pattern: str = "*.md") -> int:
         chunk_ids = self.rag.index_markdown_directory(Path(directory), pattern=pattern)
         self.indexed_chunk_ids.extend(chunk_ids)
         return len(chunk_ids)
@@ -92,14 +92,14 @@ def _safe_dir_has_files(directory: Path, *, pattern: str) -> bool:
     directory = Path(directory)
     if not directory.exists() or not directory.is_dir():
         return False
-    return any(directory.glob(pattern))
+    return any(directory.rglob(pattern))
 
 
 def build_fact_data_index_from_markdown(
     markdown_dir: Path,
     *,
     embeddings: Optional[Embeddings] = None,
-    pattern: str = "page_*.md",
+    pattern: str = "*.md",
 ) -> Optional[FactDataRAGIndex]:
     """Create and populate a fact-data index from a markdown directory."""
 

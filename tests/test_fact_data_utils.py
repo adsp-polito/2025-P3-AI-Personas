@@ -6,10 +6,15 @@ import pytest
 
 pytest.importorskip('langchain_text_splitters')
 
-from adsp.data_pipeline.fact_data_pipeline.extract_raw.utils import encode_image_base64
-from adsp.data_pipeline.fact_data_pipeline.extract_raw.utils import strip_json_markdown
-from adsp.data_pipeline.fact_data_pipeline.rag.chunker import FactDataMarkdownChunker
-from adsp.data_pipeline.fact_data_pipeline.rag.chunker import estimate_tokens
+from adsp.data_pipeline.fact_data_pipeline.extract_raw.utils import (
+    encode_image_base64,
+    fast_file_hash,
+    strip_json_markdown,
+)
+from adsp.data_pipeline.fact_data_pipeline.rag.chunker import (
+    FactDataMarkdownChunker,
+    estimate_tokens,
+)
 
 
 def write_markdown(path: Path, content: str) -> None:
@@ -91,6 +96,29 @@ def test_encode_image_base64_with_max_bytes_no_compress(tmp_path: Path):
     assert encoded
 
 
+def test_fast_file_hash_same_content_same_hash(tmp_path: Path):
+    path = tmp_path / 'a.pdf'
+    path.write_bytes(b'%PDF-1.4\\nexample-data')
+
+    first = fast_file_hash(path)
+    second = fast_file_hash(path)
+
+    assert first == second
+    assert isinstance(first, str)
+    assert first
+
+
+def test_fast_file_hash_changes_when_file_changes(tmp_path: Path):
+    path = tmp_path / 'a.pdf'
+    path.write_bytes(b'%PDF-1.4\\nexample-data-v1')
+    first = fast_file_hash(path)
+
+    path.write_bytes(b'%PDF-1.4\\nexample-data-v2')
+    second = fast_file_hash(path)
+
+    assert first != second
+
+
 def test_remove_markdown_links_inline():
     text = 'See [link](http://example.com) for details.'
     assert FactDataMarkdownChunker._remove_markdown_links(text) == 'See link for details.'
@@ -148,6 +176,19 @@ def test_chunk_markdown_file_reads_from_disk(tmp_path: Path):
 
     assert len(chunks) >= 1
     assert chunks[0].metadata.get('source_file') == 'page_0001.md'
+    assert chunks[0].metadata.get('page_number') == 1
+
+
+def test_chunk_markdown_file_reads_hash_prefixed_name(tmp_path: Path):
+    chunker = FactDataMarkdownChunker(chunk_size=200, chunk_overlap=0, min_chunk_size=1)
+    path = tmp_path / 'abc123_page_12.md'
+    write_markdown(path, '# Segment: A\\n## Page: 12\\n### Section: Intro\\n\\nBody.')
+
+    chunks = chunker.chunk_markdown_file(path)
+
+    assert len(chunks) >= 1
+    assert chunks[0].metadata.get('source_file') == 'abc123_page_12.md'
+    assert chunks[0].metadata.get('page_number') == 12
 
 
 def test_chunk_markdown_file_missing_returns_empty(tmp_path: Path):
@@ -155,3 +196,18 @@ def test_chunk_markdown_file_missing_returns_empty(tmp_path: Path):
     missing = tmp_path / 'missing.md'
     chunks = chunker.chunk_markdown_file(missing)
     assert chunks == []
+
+
+def test_chunk_directory_recursively_includes_subdirectories(tmp_path: Path):
+    chunker = FactDataMarkdownChunker(chunk_size=200, chunk_overlap=0, min_chunk_size=1)
+    nested = tmp_path / 'nested'
+    nested.mkdir()
+
+    write_markdown(tmp_path / 'page_1.md', '# Segment: A\n## Page: 1\n### Section: Intro\n\nRoot.')
+    write_markdown(nested / 'page_2.md', '# Segment: A\n## Page: 2\n### Section: Intro\n\nNested.')
+
+    chunks = chunker.chunk_directory(tmp_path, pattern='*.md')
+
+    source_files = {chunk.metadata.get('source_file') for chunk in chunks}
+    assert 'page_1.md' in source_files
+    assert 'page_2.md' in source_files

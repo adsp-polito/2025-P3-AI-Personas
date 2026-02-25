@@ -1,0 +1,178 @@
+services:
+  persona-extraction:
+    image: python:3.10-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HOME: /root/.cache/huggingface
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - adsp_venv:/opt/venv
+      - adsp_hf_cache:/root/.cache/huggingface
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+
+        if [ ! -x /opt/venv/bin/python ]; then
+          python -m venv /opt/venv
+          /opt/venv/bin/pip install --upgrade pip
+          /opt/venv/bin/pip install -r requirements.txt
+        fi
+        
+        echo "Starting persona extraction with the following environment variables:"
+        echo "PERSONA_PDF_PATH: $${PERSONA_PDF_PATH}"
+        
+        persona_pdf_path="${PERSONA_PDF_PATH:?PERSONA_PDF_PATH is required in .env}"
+
+        set -- /opt/venv/bin/python scripts/run_persona_extraction.py \
+          --pdf-path "$${persona_pdf_path}"
+
+        "$@"
+    restart: "no"
+
+  fact-extraction:
+    image: python:3.10-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HOME: /root/.cache/huggingface
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - adsp_venv:/opt/venv
+      - adsp_hf_cache:/root/.cache/huggingface
+    depends_on:
+      persona-extraction:
+        condition: service_completed_successfully
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+
+        if [ ! -x /opt/venv/bin/python ]; then
+          python -m venv /opt/venv
+          /opt/venv/bin/pip install --upgrade pip
+          /opt/venv/bin/pip install -r requirements.txt
+        fi
+
+        persona_pdf_path="${PERSONA_PDF_PATH:?PERSONA_PDF_PATH is required in .env}"
+        set -- /opt/venv/bin/python scripts/run_fact_data_extraction.py \
+          --pdf-path "$${persona_pdf_path}"
+
+        fact_page_range="${FACT_PAGE_RANGE:-__unset__}"
+        if [ "$${fact_page_range}" != "__unset__" ]; then
+          set -- "$@" --page-range "$${fact_page_range}"
+        fi
+        if [ "${FACT_DEBUG:-false}" = "true" ]; then
+          set -- "$@" --debug
+        fi
+        if [ "${FACT_NO_CACHE:-false}" = "true" ]; then
+          set -- "$@" --no-cache
+        fi
+        fact_extra_args="${FACT_EXTRA_ARGS:-__unset__}"
+        if [ "$${fact_extra_args}" != "__unset__" ]; then
+          # shellcheck disable=SC2086
+          set -- "$@" $${fact_extra_args}
+        fi
+
+        "$@"
+    restart: "no"
+
+  api:
+    image: python:3.10-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HOME: /root/.cache/huggingface
+      ADSP_API_HOST: 0.0.0.0
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - adsp_venv:/opt/venv
+      - adsp_hf_cache:/root/.cache/huggingface
+    depends_on:
+      persona-extraction:
+        condition: service_completed_successfully
+      fact-extraction:
+        condition: service_completed_successfully
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+
+        if [ ! -x /opt/venv/bin/python ]; then
+          python -m venv /opt/venv
+          /opt/venv/bin/pip install --upgrade pip
+          /opt/venv/bin/pip install -r requirements.txt
+        fi
+
+        exec /opt/venv/bin/python scripts/run_api.py
+    ports:
+      - "${ADSP_API_PORT:-8000}:${ADSP_API_PORT:-8000}"
+    healthcheck:
+      test:
+        - CMD
+        - /opt/venv/bin/python
+        - -c
+        - import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('ADSP_API_PORT', '8000') + '/health', timeout=5).read()
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    image: python:3.10-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HOME: /root/.cache/huggingface
+      ADSP_FE_API_URL: "${ADSP_FE_API_URL:-http://api:8000}"
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - adsp_venv:/opt/venv
+      - adsp_hf_cache:/root/.cache/huggingface
+    depends_on:
+      api:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+
+        if [ ! -x /opt/venv/bin/python ]; then
+          python -m venv /opt/venv
+          /opt/venv/bin/pip install --upgrade pip
+          /opt/venv/bin/pip install -r requirements.txt
+        fi
+
+        exec /opt/venv/bin/python -m streamlit run adsp/fe/app.py \
+          --server.address=0.0.0.0 \
+          --server.port="${ADSP_FE_PORT:-8501}" \
+          --server.headless=true
+    ports:
+      - "${ADSP_FE_PORT:-8501}:${ADSP_FE_PORT:-8501}"
+    restart: unless-stopped
+
+volumes:
+  adsp_venv:
+  adsp_hf_cache:

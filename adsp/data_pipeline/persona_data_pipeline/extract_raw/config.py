@@ -41,7 +41,7 @@ class PersonaExtractionConfig:
     top_p: float = 0.01
     max_tokens: int = 100000
     response_timeout: float = 300.0
-    max_concurrent_requests: int = 1
+    max_concurrent_requests: int = 4
     max_retries: int = 1  # number of retries after the first attempt
     backoff_seconds: float = 1.5
     dpi: int = 300
@@ -64,4 +64,4 @@ class PersonaExtractionConfig:
     reasoning_top_p: float = 0.01
     reasoning_max_tokens: int = 100000
     reasoning_max_input_chars: int = 100000
-    reasoning_max_concurrent: int = 2
+    reasoning_max_concurrent: int = 4

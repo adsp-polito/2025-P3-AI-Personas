@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from loguru import logger
 
@@ -106,7 +106,9 @@ def build_fact_data_index(*, processed_dir: Path = PROCESSED_DATA_DIR) -> Option
         return None
 
     try:
-        from adsp.data_pipeline.fact_data_pipeline.extract_raw.config import FactDataExtractionConfig
+        from adsp.data_pipeline.fact_data_pipeline.extract_raw.config import (
+            FactDataExtractionConfig,
+        )
     except Exception as exc:  # pragma: no cover - optional dependency guard
         logger.debug(f"Fact data pipeline unavailable: {exc}")
         return None
@@ -117,17 +119,17 @@ def build_fact_data_index(*, processed_dir: Path = PROCESSED_DATA_DIR) -> Option
     markdown_dir = Path(
         os.environ.get(
             "ADSP_FACTDATA_MARKDOWN_DIR",
-            str(cfg.fact_data_output_dir / "pages"),
+            str(cfg.fact_data_output_dir),
         )
     )
-    markdown_pattern = os.environ.get("ADSP_FACTDATA_MARKDOWN_PATTERN", "page_*.md")
+    markdown_pattern = os.environ.get("ADSP_FACTDATA_MARKDOWN_PATTERN", "*.md")
 
     index = build_fact_data_index_from_markdown(markdown_dir, pattern=markdown_pattern)
     if index is not None:
         logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
         return index
 
-    if markdown_dir.exists() and any(markdown_dir.glob(markdown_pattern)):
+    if markdown_dir.exists() and any(markdown_dir.rglob(markdown_pattern)):
         index = build_fact_data_index_from_markdown(markdown_dir, pattern=markdown_pattern)
         if index is not None:
             logger.info(f"Fact data RAG ready ({len(index.indexed_chunk_ids)} chunks)")
