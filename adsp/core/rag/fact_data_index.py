@@ -8,19 +8,24 @@ from typing import List, Optional
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.vectorstores import VectorStore
 
 from adsp.core.types import Citation, RetrievedContext
+from adsp.data_pipeline.embedding_utils import (
+    build_configured_embeddings,
+    get_configured_embedding_model_name,
+)
 from adsp.data_pipeline.fact_data_pipeline.rag.indicator import (
     FactDataRAG,
     documents_to_context_prompt,
 )
+from adsp.storage.langchain_vectorstore import VectorStoreProvider
 
-DEFAULT_EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+DEFAULT_EMBEDDING_MODEL_NAME = get_configured_embedding_model_name()
 
 
 def _default_embeddings() -> Embeddings:
-    return HuggingFaceEmbeddings(model_name=DEFAULT_EMBEDDING_MODEL_NAME)
+    return build_configured_embeddings(model_name=get_configured_embedding_model_name())
 
 
 @dataclass
@@ -28,11 +33,22 @@ class FactDataRAGIndex:
     """In-memory similarity search over fact-data markdown chunks."""
 
     embeddings: Embeddings = field(default_factory=_default_embeddings)
+    namespace: str = "fact-data"
+    loaded_from_persisted: bool = False
+    vectorstore: Optional[VectorStore] = None
+    vectorstore_provider: Optional[VectorStoreProvider] = None
     rag: FactDataRAG = field(init=False)
     indexed_chunk_ids: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        self.rag = FactDataRAG(self.embeddings)
+        vectorstore = self.vectorstore
+        if vectorstore is None and self.vectorstore_provider is not None:
+            vectorstore = self.vectorstore_provider.get(self.namespace)
+        self.rag = FactDataRAG(
+            self.embeddings,
+            vectorstore=vectorstore,
+            namespace=self.namespace,
+        )
 
     def index_markdown_directory(self, directory: Path, *, pattern: str = "*.md") -> int:
         chunk_ids = self.rag.index_markdown_directory(Path(directory), pattern=pattern)
@@ -99,6 +115,8 @@ def build_fact_data_index_from_markdown(
     markdown_dir: Path,
     *,
     embeddings: Optional[Embeddings] = None,
+    vectorstore_provider: Optional[VectorStoreProvider] = None,
+    fingerprint: Optional[str] = None,
     pattern: str = "*.md",
 ) -> Optional[FactDataRAGIndex]:
     """Create and populate a fact-data index from a markdown directory."""
@@ -106,8 +124,34 @@ def build_fact_data_index_from_markdown(
     if not _safe_dir_has_files(markdown_dir, pattern=pattern):
         return None
 
-    index = FactDataRAGIndex(embeddings=embeddings or _default_embeddings())
+    if vectorstore_provider is not None and fingerprint:
+        loaded_store = vectorstore_provider.load("fact-data", fingerprint=fingerprint)
+        if loaded_store is not None:
+            return FactDataRAGIndex(
+                embeddings=embeddings or _default_embeddings(),
+                namespace="fact-data",
+                loaded_from_persisted=True,
+                vectorstore=loaded_store,
+                vectorstore_provider=vectorstore_provider,
+            )
+
+    vectorstore = (
+        vectorstore_provider.create("fact-data", reset=True)
+        if vectorstore_provider is not None
+        else None
+    )
+    index = FactDataRAGIndex(
+        embeddings=embeddings or _default_embeddings(),
+        vectorstore=vectorstore,
+        vectorstore_provider=vectorstore_provider,
+    )
     index.index_markdown_directory(markdown_dir, pattern=pattern)
+    if vectorstore_provider is not None and fingerprint:
+        vectorstore_provider.persist(
+            "fact-data",
+            fingerprint=fingerprint,
+            vectorstore=index.rag.vectorstore,
+        )
     return index
 
 

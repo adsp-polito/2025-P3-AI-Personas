@@ -14,12 +14,24 @@ from __future__ import annotations
 import argparse
 import os
 
+from adsp.config import get_configured_log_level
+
 
 def _env_flag(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_uvicorn_log_level(raw: str) -> str:
+    normalized = raw.strip().lower()
+    valid_levels = {"critical", "error", "warning", "info", "debug", "trace"}
+    if normalized in valid_levels:
+        return normalized
+    raise SystemExit(
+        "Invalid log level. Use one of: CRITICAL, ERROR, WARNING, INFO, DEBUG, TRACE."
+    )
 
 
 def main() -> None:
@@ -51,8 +63,9 @@ def main() -> None:
         default=_env_flag("ADSP_API_DEBUG", False),
         help="Enable FastAPI debug mode (tracebacks in responses).",
     )
-    parser.add_argument("--log-level", default=os.environ.get("ADSP_API_LOG_LEVEL", "info"))
+    parser.add_argument("--log-level", default=get_configured_log_level())
     args = parser.parse_args()
+    args.log_level = _normalize_uvicorn_log_level(args.log_level)
 
     os.environ["ADSP_API_DEBUG"] = "true" if args.debug else "false"
 

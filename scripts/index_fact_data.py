@@ -6,6 +6,7 @@ import sys
 
 from loguru import logger
 
+from adsp.data_pipeline.embedding_utils import get_configured_embedding_model_name
 from adsp.data_pipeline.fact_data_pipeline.extract_raw.config import FactDataExtractionConfig
 from adsp.data_pipeline.fact_data_pipeline.rag import (
     documents_to_context_prompt,
@@ -27,7 +28,7 @@ def main():
     parser.add_argument(
         "--embedding-model",
         type=str,
-        default="sentence-transformers/all-mpnet-base-v2",
+        default=get_configured_embedding_model_name(),
         help="HuggingFace embedding model name",
     )
     parser.add_argument(

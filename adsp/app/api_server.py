@@ -8,7 +8,9 @@ import base64
 from dataclasses import dataclass
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+import threading
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -35,10 +37,73 @@ def _require_fastapi():
         ) from exc
 
 
+class LazyQAService:
+    """Lazily build the QA stack so API startup can return quickly."""
+
+    def __init__(self, factory: Optional[Callable[[], QAService]] = None) -> None:
+        self._factory = factory or QAService
+        self._instance: Optional[QAService] = None
+        self._error: Optional[Exception] = None
+        self._lock = threading.Lock()
+        self._status = "idle"
+
+    @property
+    def status(self) -> str:
+        return self._status
+
+    def warmup_async(self) -> None:
+        if self._instance is not None or self._error is not None or self._status == "warming":
+            return
+        self._status = "warming"
+        logger.info("API startup step 4/5: starting QA warmup thread")
+        thread = threading.Thread(target=self._warmup, name="qa-service-warmup", daemon=True)
+        thread.start()
+
+    def _warmup(self) -> None:
+        logger.info("QA warmup step 1/2: building QA service")
+        try:
+            self._get_instance()
+        except Exception:
+            logger.exception("QA service warmup failed")
+
+    def _get_instance(self) -> QAService:
+        instance = self._instance
+        if instance is not None:
+            return instance
+
+        with self._lock:
+            if self._instance is not None:
+                return self._instance
+            if self._error is not None:
+                raise RuntimeError("QA service initialization failed") from self._error
+
+            start = time.perf_counter()
+            try:
+                instance = self._factory()
+            except Exception as exc:
+                self._error = exc
+                self._status = "error"
+                raise RuntimeError("QA service initialization failed") from exc
+
+            self._instance = instance
+            self._status = "ready"
+            logger.info(
+                "QA warmup step 2/2: QA service ready in {:.2f}s",
+                time.perf_counter() - start,
+            )
+            return instance
+
+    def get_instance(self) -> QAService:
+        return self._get_instance()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._get_instance(), name)
+
+
 @dataclass
 class AppServices:
     auth: AuthService
-    qa: QAService
+    qa: Any
     ingestion: IngestionService
     reports: ReportService
 
@@ -46,6 +111,7 @@ class AppServices:
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str
+    qa_status: str = "unknown"
 
 
 class AuthRegisterRequest(BaseModel):
@@ -127,19 +193,33 @@ def create_app() -> Any:
 
     @app.on_event("startup")
     def _startup() -> None:
+        logger.info("API startup step 1/5: preparing application services")
         bucket = os.environ.get("ADSP_INGESTION_BUCKET", "uploads")
         reports_dir = Path(os.environ.get("ADSP_REPORTS_DIR", "reports/api"))
         reports_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("API startup step 2/5: reports directory ready at {}", reports_dir)
+        qa = LazyQAService()
+        logger.info("API startup step 3/5: creating auth, ingestion, and report services")
         app.state.services = AppServices(
             auth=AuthService(),
-            qa=QAService(),
+            qa=qa,
             ingestion=IngestionService(bucket=bucket),
             reports=ReportService(output_dir=reports_dir),
         )
-        logger.info("API server started")
+        qa.warmup_async()
+        logger.info("API startup step 5/5: server ready; health endpoint available; qa_status={}", qa.status)
 
     def get_services(request: Request) -> AppServices:
         return request.app.state.services
+
+    def get_qa_service(services: AppServices = Depends(get_services)) -> Any:
+        try:
+            qa = services.qa
+            if isinstance(qa, LazyQAService):
+                return qa.get_instance()
+            return qa
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"QA service unavailable: {exc}") from exc
 
     def auth_required() -> bool:
         raw = os.environ.get("ADSP_REQUIRE_AUTH", "false").strip().lower()
@@ -158,8 +238,10 @@ def create_app() -> Any:
             raise HTTPException(status_code=401, detail="Unauthorized")
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
-    def health() -> HealthResponse:
-        return HealthResponse(version=version)
+    def health(request: Request) -> HealthResponse:
+        services = getattr(request.app.state, "services", None)
+        qa_status = getattr(getattr(services, "qa", None), "status", "unknown")
+        return HealthResponse(version=version, qa_status=qa_status)
 
     @app.post("/v1/auth/register", tags=["auth"])
     def register_auth(payload: AuthRegisterRequest, services: AppServices = Depends(get_services)) -> Dict[str, str]:
@@ -173,8 +255,8 @@ def create_app() -> Any:
         return AuthValidateResponse(authorized=services.auth.is_authorized(payload.user, payload.token))
 
     @app.get("/v1/personas", response_model=PersonasListResponse, tags=["personas"])
-    def list_personas(services: AppServices = Depends(get_services)) -> PersonasListResponse:
-        registry = services.qa.orchestrator.prompt_builder.registry
+    def list_personas(qa: Any = Depends(get_qa_service)) -> PersonasListResponse:
+        registry = qa.orchestrator.prompt_builder.registry
         items: List[PersonaSummary] = []
         for persona_id in registry.list_personas():
             persona = registry.get(persona_id)
@@ -193,16 +275,16 @@ def create_app() -> Any:
         return PersonasListResponse(personas=items)
 
     @app.get("/v1/personas/{persona_id}/profile", response_model=PersonaProfileModel, tags=["personas"])
-    def get_persona_profile(persona_id: str, services: AppServices = Depends(get_services)) -> PersonaProfileModel:
-        registry = services.qa.orchestrator.prompt_builder.registry
+    def get_persona_profile(persona_id: str, qa: Any = Depends(get_qa_service)) -> PersonaProfileModel:
+        registry = qa.orchestrator.prompt_builder.registry
         persona = registry.get(persona_id)
         if not isinstance(persona, PersonaProfileModel):
             raise HTTPException(status_code=404, detail="Persona profile not available")
         return persona
 
     @app.get("/v1/personas/{persona_id}/system-prompt", response_model=SystemPromptResponse, tags=["personas"])
-    def get_system_prompt(persona_id: str, services: AppServices = Depends(get_services)) -> SystemPromptResponse:
-        registry = services.qa.orchestrator.prompt_builder.registry
+    def get_system_prompt(persona_id: str, qa: Any = Depends(get_qa_service)) -> SystemPromptResponse:
+        registry = qa.orchestrator.prompt_builder.registry
         persona = registry.get(persona_id)
         if isinstance(persona, PersonaProfileModel):
             return SystemPromptResponse(system_prompt=persona_to_system_prompt(persona))
@@ -211,8 +293,8 @@ def create_app() -> Any:
         raise HTTPException(status_code=404, detail="Persona not found")
 
     @app.post("/v1/chat", response_model=ChatResponseEnvelope, tags=["chat"], dependencies=[Depends(authorize)])
-    def chat(payload: ChatRequest, services: AppServices = Depends(get_services)) -> ChatResponseEnvelope:
-        response = services.qa.orchestrator.handle(payload)
+    def chat(payload: ChatRequest, qa: Any = Depends(get_qa_service)) -> ChatResponseEnvelope:
+        response = qa.orchestrator.handle(payload)
         return ChatResponseEnvelope(response=response)
 
     @app.post(

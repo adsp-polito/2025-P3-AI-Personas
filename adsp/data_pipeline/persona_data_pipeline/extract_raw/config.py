@@ -37,13 +37,13 @@ class PersonaExtractionConfig:
     )
     vllm_model: str = field(default_factory=lambda: os.environ.get("VLLM_MODEL", ""))
     vllm_api_key: str = field(default_factory=lambda: os.environ.get("VLLM_API_KEY", "EMPTY"))
-    temperature: float = 0.0
-    top_p: float = 0.01
-    max_tokens: int = 100000
-    response_timeout: float = 300.0
-    max_concurrent_requests: int = 4
-    max_retries: int = 1  # number of retries after the first attempt
-    backoff_seconds: float = 1.5
+    temperature: float = field(default_factory=lambda: os.environ.get("TEMPERATURE", "0.0"))
+    top_p: float = field(default_factory=lambda: os.environ.get("TOP_P", "0.01"))
+    max_tokens: int = field(default_factory=lambda: int(os.environ.get("MAX_TOKENS", "100000")))
+    response_timeout: float = float(os.environ.get("RESPONSE_TIMEOUT", "300.0"))
+    max_concurrent_requests: int = field(default_factory=lambda: int(os.environ.get("VLLM_MAX_CONCURRENT_REQUESTS", "4")))
+    max_retries: int = field(default_factory=lambda: int(os.environ.get("VLM_MAX_RETRIES","3")))  # number of retries after the first attempt
+    backoff_seconds: float = float(os.environ.get("VLLM_BACKOFF_SECONDS", "1"))
     dpi: int = 300
     page_range: Optional[tuple[int, int]] = None  # inclusive 1-based page range
     merge_strategy: Dict[str, str] = field(
@@ -60,8 +60,8 @@ class PersonaExtractionConfig:
     reasoning_api_key: str = field(
         default_factory=lambda: os.environ.get("REASONING_API_KEY", os.environ.get("VLLM_API_KEY", "EMPTY"))
     )
-    reasoning_temperature: float = 0.0
-    reasoning_top_p: float = 0.01
-    reasoning_max_tokens: int = 100000
-    reasoning_max_input_chars: int = 100000
-    reasoning_max_concurrent: int = 4
+    reasoning_temperature: float = float(os.environ.get("REASONING_TEMPERATURE", "0.0"))
+    reasoning_top_p: float = float(os.environ.get("REASONING_TOP_P", "0.01"))
+    reasoning_max_tokens: int = int(os.environ.get("REASONING_MAX_TOKENS", "100000"))
+    reasoning_max_input_chars: int = int(os.environ.get("REASONING_MAX_INPUT_CHARS", "100000"))
+    reasoning_max_concurrent: int = int(os.environ.get("REASONING_MAX_CONCURRENT", "4"))

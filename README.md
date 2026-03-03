@@ -94,6 +94,18 @@ python scripts/index_fact_data.py \
 
 ### Running the Application
 
+#### Docker Compose
+
+Run the full stack:
+
+```bash
+docker compose up
+```
+
+The `api` service requests `gpus: all`. Your Docker host must have NVIDIA GPU container support configured, or Compose will fail during container creation.
+
+The vector store cache is persisted on the host at `./data/processed/vectorstores` and is mounted into the API container at `/app/data/processed/vectorstores`.
+
 #### Backend API
 
 Start the FastAPI backend server:
@@ -120,7 +132,7 @@ Environment variables:
 - `ADSP_API_HOST`, `ADSP_API_PORT`: Host and port configuration
 - `ADSP_API_RELOAD`: `true`/`false` (uvicorn mode only)
 - `ADSP_API_DEBUG`: `true`/`false`
-- `ADSP_API_LOG_LEVEL`: `info`, `debug`, etc.
+- `ADSP_API_LOG_LEVEL`: `INFO`, `DEBUG`, `ERROR`, etc. Case-insensitive.
 
 #### Frontend UI
 

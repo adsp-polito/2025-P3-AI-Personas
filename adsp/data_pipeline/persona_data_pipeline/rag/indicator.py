@@ -13,28 +13,8 @@ from langchain_core.embeddings import Embeddings
 # vector store interfaces for similarity search and retrieval
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 
-from adsp.data_pipeline.embedding_utils import get_embedding_dimension
 from adsp.data_pipeline.schema import Indicator, PersonaProfileModel, Statement
-
-
-def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
-    try:
-        import faiss  # type: ignore
-        from langchain_community.docstore.in_memory import InMemoryDocstore
-        from langchain_community.vectorstores import FAISS
-    except Exception as exc:
-        raise RuntimeError(
-            "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
-        ) from exc
-
-    dim = get_embedding_dimension(embeddings)
-    index = faiss.IndexFlatL2(dim)
-    return FAISS(
-        embedding_function=embeddings,
-        index=index,
-        docstore=InMemoryDocstore(),
-        index_to_docstore_id={},
-    )
+from adsp.storage.langchain_vectorstore import build_vectorstore
 
 
 class PersonaIndicatorRAG:
@@ -45,9 +25,10 @@ class PersonaIndicatorRAG:
         embeddings: Embeddings,
         *,
         vectorstore: VectorStore | None = None,
+        namespace: str = "persona",
     ) -> None:
         self.embeddings = embeddings
-        self.vectorstore = vectorstore or _default_vectorstore(embeddings)
+        self.vectorstore = vectorstore or build_vectorstore(embeddings, namespace=namespace)
 
     def index_persona(self, persona: PersonaProfileModel) -> List[str]:
         """Add a persona's indicators to the vector store, so index all indicators of the given persona"""

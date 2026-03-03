@@ -1,4 +1,46 @@
 services:
+  embedding-model-cache:
+    image: python:3.10-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HOME: /root/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /root/.cache/huggingface/hub
+      SENTENCE_TRANSFORMERS_HOME: /root/.cache/huggingface/sentence_transformers
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - adsp_venv:/opt/venv
+      - ./data/huggingface:/root/.cache/huggingface
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+
+        mkdir -p "$${HF_HOME}" "$${HUGGINGFACE_HUB_CACHE}" "$${SENTENCE_TRANSFORMERS_HOME}"
+        /bin/sh scripts/bootstrap_venv.sh
+
+        /opt/venv/bin/python - <<'PY'
+        import os
+
+        from sentence_transformers import SentenceTransformer
+
+        from adsp.data_pipeline.embedding_utils import get_configured_embedding_model_name
+
+        cache_dir = os.environ.get("SENTENCE_TRANSFORMERS_HOME") or os.environ.get("HF_HOME")
+        model_name = get_configured_embedding_model_name()
+        print(f"Caching embedding model: {model_name}")
+        print(f"Cache directory: {cache_dir}")
+        SentenceTransformer(model_name, cache_folder=cache_dir)
+        print("Embedding model cache ready.")
+        PY
+    restart: "no"
+
   persona-extraction:
     image: python:3.10-slim
     working_dir: /app
@@ -8,22 +50,22 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       HF_HOME: /root/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /root/.cache/huggingface/hub
+      SENTENCE_TRANSFORMERS_HOME: /root/.cache/huggingface/sentence_transformers
     volumes:
       - ./:/app
       - ./data:/app/data
       - adsp_venv:/opt/venv
-      - adsp_hf_cache:/root/.cache/huggingface
+      - ./data/huggingface:/root/.cache/huggingface
+    depends_on:
+      embedding-model-cache:
+        condition: service_completed_successfully
     command:
       - /bin/sh
       - -lc
       - |
         set -eu
-
-        if [ ! -x /opt/venv/bin/python ]; then
-          python -m venv /opt/venv
-          /opt/venv/bin/pip install --upgrade pip
-          /opt/venv/bin/pip install -r requirements.txt
-        fi
+        /bin/sh scripts/bootstrap_venv.sh
         
         echo "Starting persona extraction with the following environment variables:"
         echo "PERSONA_PDF_PATH: $${PERSONA_PDF_PATH}"
@@ -45,12 +87,16 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       HF_HOME: /root/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /root/.cache/huggingface/hub
+      SENTENCE_TRANSFORMERS_HOME: /root/.cache/huggingface/sentence_transformers
     volumes:
       - ./:/app
       - ./data:/app/data
       - adsp_venv:/opt/venv
-      - adsp_hf_cache:/root/.cache/huggingface
+      - ./data/huggingface:/root/.cache/huggingface
     depends_on:
+      embedding-model-cache:
+        condition: service_completed_successfully
       persona-extraction:
         condition: service_completed_successfully
     command:
@@ -58,16 +104,11 @@ services:
       - -lc
       - |
         set -eu
+        /bin/sh scripts/bootstrap_venv.sh
 
-        if [ ! -x /opt/venv/bin/python ]; then
-          python -m venv /opt/venv
-          /opt/venv/bin/pip install --upgrade pip
-          /opt/venv/bin/pip install -r requirements.txt
-        fi
-
-        persona_pdf_path="${PERSONA_PDF_PATH:?PERSONA_PDF_PATH is required in .env}"
+        factdata_pdf_path="${FACT_DATA_PDF_PATH:?FACT_DATA_PDF_PATH is required in .env}"
         set -- /opt/venv/bin/python scripts/run_fact_data_extraction.py \
-          --pdf-path "$${persona_pdf_path}"
+          --pdf-path "$${factdata_pdf_path}"
 
         fact_page_range="${FACT_PAGE_RANGE:-__unset__}"
         if [ "$${fact_page_range}" != "__unset__" ]; then
@@ -94,17 +135,23 @@ services:
     env_file:
       - .env
     environment:
+      NVIDIA_VISIBLE_DEVICES: "${ADSP_API_GPU_VISIBLE_DEVICES:-all}"
+      NVIDIA_DRIVER_CAPABILITIES: "${ADSP_API_GPU_DRIVER_CAPABILITIES:-compute,utility}"
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       HF_HOME: /root/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /root/.cache/huggingface/hub
+      SENTENCE_TRANSFORMERS_HOME: /root/.cache/huggingface/sentence_transformers
       ADSP_API_HOST: 0.0.0.0
     volumes:
       - ./:/app
       - ./data:/app/data
+      - ./data/processed/vectorstores:/app/data/processed/vectorstores
       - adsp_venv:/opt/venv
-      - adsp_hf_cache:/root/.cache/huggingface
+      - ./data/huggingface:/root/.cache/huggingface
+    gpus: "${ADSP_API_GPU_REQUEST:-all}"
     depends_on:
-      persona-extraction:
+      embedding-model-cache:
         condition: service_completed_successfully
       fact-extraction:
         condition: service_completed_successfully
@@ -113,14 +160,9 @@ services:
       - -lc
       - |
         set -eu
+        /bin/sh scripts/bootstrap_venv.sh
 
-        if [ ! -x /opt/venv/bin/python ]; then
-          python -m venv /opt/venv
-          /opt/venv/bin/pip install --upgrade pip
-          /opt/venv/bin/pip install -r requirements.txt
-        fi
-
-        exec /opt/venv/bin/python scripts/run_api.py
+        exec /opt/venv/bin/python scripts/run_api.py --mode direct
     ports:
       - "${ADSP_API_PORT:-8000}:${ADSP_API_PORT:-8000}"
     healthcheck:
@@ -129,7 +171,7 @@ services:
         - /opt/venv/bin/python
         - -c
         - import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('ADSP_API_PORT', '8000') + '/health', timeout=5).read()
-      interval: 10s
+      interval: 60s
       timeout: 5s
       retries: 20
       start_period: 10s
@@ -144,13 +186,17 @@ services:
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       HF_HOME: /root/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /root/.cache/huggingface/hub
+      SENTENCE_TRANSFORMERS_HOME: /root/.cache/huggingface/sentence_transformers
       ADSP_FE_API_URL: "${ADSP_FE_API_URL:-http://api:8000}"
     volumes:
       - ./:/app
       - ./data:/app/data
       - adsp_venv:/opt/venv
-      - adsp_hf_cache:/root/.cache/huggingface
+      - ./data/huggingface:/root/.cache/huggingface
     depends_on:
+      embedding-model-cache:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
     command:
@@ -158,12 +204,7 @@ services:
       - -lc
       - |
         set -eu
-
-        if [ ! -x /opt/venv/bin/python ]; then
-          python -m venv /opt/venv
-          /opt/venv/bin/pip install --upgrade pip
-          /opt/venv/bin/pip install -r requirements.txt
-        fi
+        /bin/sh scripts/bootstrap_venv.sh
 
         exec /opt/venv/bin/python -m streamlit run adsp/fe/app.py \
           --server.address=0.0.0.0 \
@@ -175,4 +216,3 @@ services:
 
 volumes:
   adsp_venv:
-  adsp_hf_cache:

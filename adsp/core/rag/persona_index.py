@@ -9,20 +9,24 @@ from typing import Dict, Iterable, List, Optional
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 
 from adsp.core.types import Citation, RetrievedContext
+from adsp.data_pipeline.embedding_utils import (
+    build_configured_embeddings,
+    get_configured_embedding_model_name,
+)
 from adsp.data_pipeline.persona_data_pipeline.rag.indicator import (
     PersonaIndicatorRAG,
     documents_to_context_prompt,
 )
 from adsp.data_pipeline.schema import PersonaProfileModel
+from adsp.storage.langchain_vectorstore import VectorStoreProvider
 
-DEFAULT_EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+DEFAULT_EMBEDDING_MODEL_NAME = get_configured_embedding_model_name()
 
 
-def _default_embeddings() -> Embeddings:
-    return HuggingFaceEmbeddings(model_name=DEFAULT_EMBEDDING_MODEL_NAME)
+def get_default_embeddings() -> Embeddings:
+    return build_configured_embeddings(model_name=get_configured_embedding_model_name())
 
 
 class HashEmbeddings(Embeddings):
@@ -66,14 +70,32 @@ class HashEmbeddings(Embeddings):
 class PersonaRAGIndex:
     """Builds and queries per-persona indicator vector stores."""
 
-    embeddings: Embeddings = field(default_factory=_default_embeddings)
+    embeddings: Embeddings = field(default_factory=get_default_embeddings)
+    vectorstore_provider: Optional[VectorStoreProvider] = None
     _indexes: Dict[str, PersonaIndicatorRAG] = field(default_factory=dict)
+
+    def attach_persona_vectorstore(self, persona_id: str, *, vectorstore, namespace: str) -> None:
+        self._indexes[persona_id] = PersonaIndicatorRAG(
+            self.embeddings,
+            vectorstore=vectorstore,
+            namespace=namespace,
+        )
 
     def index_personas(self, personas: Iterable[PersonaProfileModel]) -> None:
         for persona in personas:
             if not persona.persona_id:
                 continue
-            rag = PersonaIndicatorRAG(self.embeddings)
+            namespace = f"persona-{persona.persona_id}"
+            vectorstore = (
+                self.vectorstore_provider.get(namespace)
+                if self.vectorstore_provider is not None
+                else None
+            )
+            rag = PersonaIndicatorRAG(
+                self.embeddings,
+                vectorstore=vectorstore,
+                namespace=namespace,
+            )
             rag.index_persona(persona)
             self._indexes[persona.persona_id] = rag
 

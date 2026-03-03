@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+import sys
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -21,12 +23,23 @@ MODELS_DIR = PROJ_ROOT / "models"
 REPORTS_DIR = PROJ_ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
+
+def get_configured_log_level(default: str = "INFO") -> str:
+    """Return the configured log level normalized for Loguru/Uvicorn."""
+
+    for env_var in ("ADSP_LOG_LEVEL", "ADSP_API_LOG_LEVEL"):
+        raw = os.environ.get(env_var, "").strip()
+        if raw:
+            return raw.upper()
+    return default.upper()
+
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135
+logger.remove()
+
 try:
     from tqdm import tqdm
 
-    logger.remove(0)
-    logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True)
+    logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level=get_configured_log_level())
 except ModuleNotFoundError:
-    pass
+    logger.add(sys.stderr, level=get_configured_log_level())

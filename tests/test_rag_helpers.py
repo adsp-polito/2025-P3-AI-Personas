@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 
 from adsp.core.rag.fact_data_index import _safe_dir_has_files, build_fact_data_index_from_markdown
 from adsp.core.rag.persona_index import HashEmbeddings
+from adsp.data_pipeline.embedding_utils import get_configured_embedding_config
 from adsp.data_pipeline.fact_data_pipeline.rag.indicator import (
     documents_to_context_prompt as fact_prompt,
 )
@@ -18,6 +19,13 @@ from adsp.data_pipeline.persona_data_pipeline.rag.indicator import (
     documents_to_context_prompt as persona_prompt,
 )
 from adsp.data_pipeline.schema import Indicator, Metric, PersonaProfileModel, Source, Statement
+from adsp.storage.langchain_vectorstore import (
+    DEFAULT_VECTORSTORE_BACKEND,
+    VectorStoreConfig,
+    VectorStoreProvider,
+    build_collection_name,
+    get_vectorstore_config,
+)
 
 
 def build_persona() -> PersonaProfileModel:
@@ -174,3 +182,121 @@ def test_safe_dir_has_files_finds_nested_markdown(tmp_path: Path):
 def test_build_fact_data_index_from_markdown_no_files(tmp_path: Path):
     index = build_fact_data_index_from_markdown(tmp_path, pattern='*.md')
     assert index is None
+
+
+def test_embedding_config_defaults(monkeypatch):
+    monkeypatch.delenv("ADSP_EMBEDDING_DEVICE", raising=False)
+    monkeypatch.delenv("ADSP_EMBEDDING_BATCH_SIZE", raising=False)
+    monkeypatch.setattr(
+        "adsp.data_pipeline.embedding_utils.get_available_embedding_device",
+        lambda: "cuda",
+    )
+    config = get_configured_embedding_config(model_name="test-model")
+    assert config.model_name == "test-model"
+    assert config.device == "cuda"
+    assert config.batch_size is None
+
+
+def test_embedding_config_reads_device_and_batch_size(monkeypatch):
+    monkeypatch.setenv("ADSP_EMBEDDING_DEVICE", "cuda")
+    monkeypatch.setenv("ADSP_EMBEDDING_BATCH_SIZE", "64")
+    config = get_configured_embedding_config(model_name="test-model")
+    assert config.device == "cuda"
+    assert config.batch_size == 64
+
+
+def test_embedding_config_auto_device_uses_available_device(monkeypatch):
+    monkeypatch.setenv("ADSP_EMBEDDING_DEVICE", "auto")
+    monkeypatch.setattr(
+        "adsp.data_pipeline.embedding_utils.get_available_embedding_device",
+        lambda: "mps",
+    )
+    config = get_configured_embedding_config(model_name="test-model")
+    assert config.device == "mps"
+
+
+def test_vectorstore_config_defaults(monkeypatch):
+    monkeypatch.delenv("ADSP_VECTORSTORE_BACKEND", raising=False)
+    config = get_vectorstore_config()
+    assert config.backend == DEFAULT_VECTORSTORE_BACKEND
+
+
+def test_vectorstore_config_rejects_invalid_backend(monkeypatch):
+    monkeypatch.setenv("ADSP_VECTORSTORE_BACKEND", "unknown")
+    with pytest.raises(ValueError):
+        get_vectorstore_config()
+
+
+def test_build_collection_name_sanitizes_namespace(monkeypatch):
+    monkeypatch.setenv("ADSP_VECTORSTORE_COLLECTION_PREFIX", "My App")
+    monkeypatch.setenv("ADSP_VECTORSTORE_BACKEND", "faiss")
+    name = build_collection_name(namespace="Persona / Alpha")
+    assert name == "my-app-persona-alpha"
+
+
+def test_vectorstore_provider_caches_namespaces():
+    emb = HashEmbeddings()
+    provider = VectorStoreProvider(embeddings=emb)
+
+    store_one = provider.get("persona-alpha")
+    store_two = provider.get("persona-alpha")
+    store_three = provider.get("fact-data")
+
+    assert store_one is store_two
+    assert store_one is not store_three
+
+
+class _FakePersistedStore:
+    def __init__(self):
+        self.saved_paths = []
+
+    def save_local(self, path: str) -> None:
+        path_obj = Path(path)
+        path_obj.mkdir(parents=True, exist_ok=True)
+        (path_obj / "index.faiss").write_text("stub", encoding="utf-8")
+        self.saved_paths.append(path)
+
+
+def test_vectorstore_provider_loads_persisted_store_when_fingerprint_matches(tmp_path: Path, monkeypatch):
+    emb = HashEmbeddings()
+    provider = VectorStoreProvider(
+        embeddings=emb,
+        config=VectorStoreConfig(
+            backend="faiss",
+            persist_dir=tmp_path,
+            collection_prefix="adsp",
+        ),
+    )
+    store = _FakePersistedStore()
+    loaded_store = object()
+
+    monkeypatch.setattr(provider, "_load_persisted", lambda namespace: loaded_store)
+
+    provider.persist("persona-alpha", fingerprint="fingerprint-1", vectorstore=store)
+
+    assert provider.load("persona-alpha", fingerprint="fingerprint-1") is loaded_store
+
+
+def test_vectorstore_provider_skips_persisted_store_when_fingerprint_changes(tmp_path: Path, monkeypatch):
+    emb = HashEmbeddings()
+    provider = VectorStoreProvider(
+        embeddings=emb,
+        config=VectorStoreConfig(
+            backend="faiss",
+            persist_dir=tmp_path,
+            collection_prefix="adsp",
+        ),
+    )
+    store = _FakePersistedStore()
+    load_calls = []
+
+    def _fake_load(namespace: str):
+        load_calls.append(namespace)
+        return object()
+
+    monkeypatch.setattr(provider, "_load_persisted", _fake_load)
+
+    provider.persist("persona-alpha", fingerprint="fingerprint-1", vectorstore=store)
+
+    assert provider.load("persona-alpha", fingerprint="fingerprint-2") is None
+    assert load_calls == []

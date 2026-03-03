@@ -278,10 +278,6 @@ def main(raw_args: Optional[list[str]] = None) -> None:
             scope_outputs_for_document(config, pdf_path)
         summaries.append(run_for_config(config))
 
-    if len(summaries) == 1:
-        print(json.dumps(summaries[0], indent=2))
-        return
-    print(json.dumps({"documents": summaries}, indent=2))
 
 
 if __name__ == "__main__":

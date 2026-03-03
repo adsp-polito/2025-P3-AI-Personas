@@ -10,6 +10,8 @@ from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from loguru import logger
 
+from adsp.utils.progress import progress_bar
+
 
 class FactDataMarkdownChunker:
     """Chunks markdown files for embedding with all-mpnet-base-v2 model.
@@ -241,10 +243,22 @@ class FactDataMarkdownChunker:
         markdown_files = sorted(directory.rglob(pattern))
         
         logger.info(f"Chunking {len(markdown_files)} markdown files from {directory}")
-        
-        for file_path in markdown_files:
-            chunks = self.chunk_markdown_file(file_path)
-            all_chunks.extend(chunks)
+
+        with progress_bar(
+            total=len(markdown_files),
+            desc="Chunking markdown",
+            unit="file",
+            leave=False,
+        ) as progress:
+            for file_path in markdown_files:
+                chunks = self.chunk_markdown_file(file_path)
+                all_chunks.extend(chunks)
+                progress.update(1)
+                progress.set_postfix(
+                    file=file_path.name,
+                    chunks=len(chunks),
+                    total=len(all_chunks),
+                )
         
         logger.info(
             f"Chunked {len(markdown_files)} files into {len(all_chunks)} total chunks"
