@@ -28,9 +28,17 @@ services:
         /opt/venv/bin/python - <<'PY'
         import os
 
-        from sentence_transformers import SentenceTransformer
+        from adsp.data_pipeline.embedding_utils import (
+            get_configured_embedding_backend,
+            get_configured_embedding_model_name,
+        )
 
-        from adsp.data_pipeline.embedding_utils import get_configured_embedding_model_name
+        backend = get_configured_embedding_backend()
+        if backend != "huggingface":
+            print(f"Skipping local embedding model cache for backend: {backend}")
+            raise SystemExit(0)
+
+        from sentence_transformers import SentenceTransformer
 
         cache_dir = os.environ.get("SENTENCE_TRANSFORMERS_HOME") or os.environ.get("HF_HOME")
         model_name = get_configured_embedding_model_name()
@@ -162,7 +170,7 @@ services:
         set -eu
         /bin/sh scripts/bootstrap_venv.sh
 
-        exec /opt/venv/bin/python scripts/run_api.py --mode direct
+        exec /opt/venv/bin/python scripts/run_api.py
     ports:
       - "${ADSP_API_PORT:-8000}:${ADSP_API_PORT:-8000}"
     healthcheck:

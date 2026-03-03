@@ -1,6 +1,7 @@
 """RAG helper and embedding tests."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,7 +11,12 @@ from langchain_core.documents import Document
 
 from adsp.core.rag.fact_data_index import _safe_dir_has_files, build_fact_data_index_from_markdown
 from adsp.core.rag.persona_index import HashEmbeddings
-from adsp.data_pipeline.embedding_utils import get_configured_embedding_config
+from adsp.data_pipeline.embedding_utils import (
+    OpenAICompatibleEmbeddings,
+    build_configured_embeddings,
+    get_configured_embedding_config,
+    get_configured_embedding_signature,
+)
 from adsp.data_pipeline.fact_data_pipeline.rag.indicator import (
     documents_to_context_prompt as fact_prompt,
 )
@@ -185,6 +191,7 @@ def test_build_fact_data_index_from_markdown_no_files(tmp_path: Path):
 
 
 def test_embedding_config_defaults(monkeypatch):
+    monkeypatch.delenv("ADSP_EMBEDDING_BACKEND", raising=False)
     monkeypatch.delenv("ADSP_EMBEDDING_DEVICE", raising=False)
     monkeypatch.delenv("ADSP_EMBEDDING_BATCH_SIZE", raising=False)
     monkeypatch.setattr(
@@ -192,12 +199,14 @@ def test_embedding_config_defaults(monkeypatch):
         lambda: "cuda",
     )
     config = get_configured_embedding_config(model_name="test-model")
+    assert config.backend == "huggingface"
     assert config.model_name == "test-model"
     assert config.device == "cuda"
     assert config.batch_size is None
 
 
 def test_embedding_config_reads_device_and_batch_size(monkeypatch):
+    monkeypatch.delenv("ADSP_EMBEDDING_BACKEND", raising=False)
     monkeypatch.setenv("ADSP_EMBEDDING_DEVICE", "cuda")
     monkeypatch.setenv("ADSP_EMBEDDING_BATCH_SIZE", "64")
     config = get_configured_embedding_config(model_name="test-model")
@@ -206,6 +215,7 @@ def test_embedding_config_reads_device_and_batch_size(monkeypatch):
 
 
 def test_embedding_config_auto_device_uses_available_device(monkeypatch):
+    monkeypatch.delenv("ADSP_EMBEDDING_BACKEND", raising=False)
     monkeypatch.setenv("ADSP_EMBEDDING_DEVICE", "auto")
     monkeypatch.setattr(
         "adsp.data_pipeline.embedding_utils.get_available_embedding_device",
@@ -213,6 +223,89 @@ def test_embedding_config_auto_device_uses_available_device(monkeypatch):
     )
     config = get_configured_embedding_config(model_name="test-model")
     assert config.device == "mps"
+
+
+def test_embedding_config_openai_backend_reads_extra_body(monkeypatch):
+    monkeypatch.setenv("ADSP_EMBEDDING_BACKEND", "openai")
+    monkeypatch.setenv("ADSP_EMBEDDING_API_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    monkeypatch.setenv("ADSP_EMBEDDING_QUERY_EXTRA_BODY", '{"input_type":"query"}')
+    monkeypatch.setenv("ADSP_EMBEDDING_DOCUMENT_EXTRA_BODY", '{"input_type":"passage"}')
+
+    config = get_configured_embedding_config(model_name="nvidia/embed")
+
+    assert config.backend == "openai"
+    assert config.model_name == "nvidia/embed"
+    assert config.device is None
+    assert config.batch_size is None
+    assert config.api_base_url == "https://integrate.api.nvidia.com/v1"
+    assert config.query_extra_body == {"input_type": "query"}
+    assert config.document_extra_body == {"input_type": "passage"}
+
+
+def test_embedding_signature_changes_with_backend(monkeypatch):
+    monkeypatch.setenv("ADSP_EMBEDDING_BACKEND", "huggingface")
+    signature_one = get_configured_embedding_signature(model_name="model-a")
+
+    monkeypatch.setenv("ADSP_EMBEDDING_BACKEND", "openai")
+    monkeypatch.setenv("ADSP_EMBEDDING_API_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    signature_two = get_configured_embedding_signature(model_name="model-a")
+
+    assert signature_one != signature_two
+
+
+class _FakeEmbeddingsEndpoint:
+    def __init__(self):
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        items = []
+        for index, text in enumerate(kwargs["input"]):
+            items.append(SimpleNamespace(index=index, embedding=[float(len(text)), float(index)]))
+        return SimpleNamespace(data=items)
+
+
+class _FakeOpenAIClient:
+    def __init__(self, *, api_key: str, base_url: str):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.embeddings = _FakeEmbeddingsEndpoint()
+
+
+def test_build_configured_embeddings_openai_backend(monkeypatch):
+    fake_client_holder = {}
+
+    def _factory(*, api_key: str, base_url: str):
+        client = _FakeOpenAIClient(api_key=api_key, base_url=base_url)
+        fake_client_holder["client"] = client
+        return client
+
+    monkeypatch.setenv("ADSP_EMBEDDING_BACKEND", "openai")
+    monkeypatch.setenv("ADSP_EMBEDDING_MODEL_NAME", "nvidia/embed")
+    monkeypatch.setenv("ADSP_EMBEDDING_API_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    monkeypatch.setenv("ADSP_EMBEDDING_API_KEY", "secret")
+    monkeypatch.setenv("ADSP_EMBEDDING_ENCODING_FORMAT", "float")
+    monkeypatch.setenv(
+        "ADSP_EMBEDDING_QUERY_EXTRA_BODY",
+        '{"modality":["text"],"input_type":"query","truncate":"NONE"}',
+    )
+    monkeypatch.setenv(
+        "ADSP_EMBEDDING_DOCUMENT_EXTRA_BODY",
+        '{"modality":["text"],"input_type":"passage","truncate":"NONE"}',
+    )
+    monkeypatch.setattr("openai.OpenAI", _factory)
+
+    embeddings = build_configured_embeddings()
+
+    assert isinstance(embeddings, OpenAICompatibleEmbeddings)
+    assert embeddings.embed_query("hello") == [5.0, 0.0]
+    assert embeddings.embed_documents(["abc", "de"]) == [[3.0, 0.0], [2.0, 1.0]]
+
+    calls = fake_client_holder["client"].embeddings.calls
+    assert calls[0]["model"] == "nvidia/embed"
+    assert calls[0]["encoding_format"] == "float"
+    assert calls[0]["extra_body"]["input_type"] == "query"
+    assert calls[1]["extra_body"]["input_type"] == "passage"
 
 
 def test_vectorstore_config_defaults(monkeypatch):

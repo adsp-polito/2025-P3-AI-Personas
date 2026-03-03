@@ -22,6 +22,7 @@ from adsp.data_pipeline.embedding_utils import (
     build_configured_embeddings,
     get_configured_embedding_config,
     get_configured_embedding_model_name,
+    get_configured_embedding_signature,
 )
 from adsp.data_pipeline.persona_data_pipeline.rag.indicator import PersonaIndicatorRAG
 from adsp.data_pipeline.schema import PersonaProfileModel
@@ -112,7 +113,7 @@ def _env_flag(name: str, default: bool) -> bool:
 def _fingerprint_paths(paths: List[Path], *, label: str) -> str:
     digest = hashlib.sha256()
     digest.update(label.encode("utf-8"))
-    digest.update(get_configured_embedding_model_name().encode("utf-8"))
+    digest.update(get_configured_embedding_signature().encode("utf-8"))
 
     for path in sorted({Path(p) for p in paths}, key=lambda item: str(item)):
         digest.update(str(path).encode("utf-8"))
@@ -150,10 +151,12 @@ def _log_runtime_rag_config() -> None:
     embedding_config = get_configured_embedding_config()
     vectorstore_config = get_vectorstore_config()
     logger.info(
-        "QA runtime config: embedding_model={} device={} batch_size={}",
+        "QA runtime config: embedding_backend={} embedding_model={} device={} batch_size={} api_base_url={}",
+        embedding_config.backend,
         embedding_config.model_name,
-        embedding_config.device,
+        embedding_config.device or "n/a",
         embedding_config.batch_size or "default",
+        embedding_config.api_base_url or "n/a",
     )
     logger.info(
         "QA runtime config: vectorstore_backend={} persist_dir={} reset_on_startup={}",

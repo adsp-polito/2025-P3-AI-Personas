@@ -131,6 +131,7 @@ Environment variables:
 - `ADSP_API_RUN_MODE`: `uvicorn` (default) or `direct`
 - `ADSP_API_HOST`, `ADSP_API_PORT`: Host and port configuration
 - `ADSP_API_RELOAD`: `true`/`false` (uvicorn mode only)
+- `ADSP_API_WORKERS`: worker process count for uvicorn mode. Use `ADSP_API_RELOAD=false` when setting this above `1`.
 - `ADSP_API_DEBUG`: `true`/`false`
 - `ADSP_API_LOG_LEVEL`: `INFO`, `DEBUG`, `ERROR`, etc. Case-insensitive.
 
@@ -154,6 +155,28 @@ export ADSP_LLM_BASE_URL=http://localhost:8000/v1
 export ADSP_LLM_MODEL=mistralai/mistral-small-24b-instruct
 export ADSP_LLM_API_KEY=EMPTY
 ```
+
+#### Embedding Backend Configuration
+
+By default, embeddings use a local HuggingFace model:
+
+```bash
+export ADSP_EMBEDDING_BACKEND=huggingface
+export ADSP_EMBEDDING_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+```
+
+To use an OpenAI-compatible embeddings endpoint such as NVIDIA NIM:
+
+```bash
+export ADSP_EMBEDDING_BACKEND=openai
+export ADSP_EMBEDDING_MODEL_NAME=nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1
+export ADSP_EMBEDDING_API_BASE_URL=https://integrate.api.nvidia.com/v1
+export ADSP_EMBEDDING_API_KEY="$NVIDIA_API_KEY"
+export ADSP_EMBEDDING_QUERY_EXTRA_BODY='{"modality":["text"],"input_type":"query","truncate":"NONE"}'
+export ADSP_EMBEDDING_DOCUMENT_EXTRA_BODY='{"modality":["text"],"input_type":"passage","truncate":"NONE"}'
+```
+
+The embedding-model cache container skips local model downloads automatically when `ADSP_EMBEDDING_BACKEND=openai`.
 
 ### Quickstart Demo (CLI)
 

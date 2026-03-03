@@ -29,7 +29,7 @@ def main():
         "--embedding-model",
         type=str,
         default=get_configured_embedding_model_name(),
-        help="HuggingFace embedding model name",
+        help="Embedding model name for the configured backend",
     )
     parser.add_argument(
         "--chunk-size",

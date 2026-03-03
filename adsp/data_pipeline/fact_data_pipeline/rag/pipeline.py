@@ -55,10 +55,12 @@ def run_fact_data_indexing_pipeline(
     vectorstore_config = get_vectorstore_config()
     logger.info("Indexing config: markdown_dir={}", markdown_dir)
     logger.info(
-        "Indexing config: embedding_model={} device={} batch_size={}",
+        "Indexing config: embedding_backend={} embedding_model={} device={} batch_size={} api_base_url={}",
+        embedding_config.backend,
         embedding_config.model_name,
-        embedding_config.device,
+        embedding_config.device or "n/a",
         embedding_config.batch_size or "default",
+        embedding_config.api_base_url or "n/a",
     )
     logger.info(
         "Indexing config: vectorstore_backend={} persist_dir={} reset_on_startup={}",
@@ -78,9 +80,11 @@ def run_fact_data_indexing_pipeline(
         logger.info("Loading embedding model...")
         embedding_model = build_configured_embeddings(model_name=embedding_model_name)
         logger.info(
-            "Embedding model loaded: model={} device={}",
+            "Embedding model loaded: backend={} model={} device={} api_base_url={}",
+            embedding_config.backend,
             embedding_config.model_name,
-            embedding_config.device,
+            embedding_config.device or "n/a",
+            embedding_config.api_base_url or "n/a",
         )
     
     if vectorstore is None:
