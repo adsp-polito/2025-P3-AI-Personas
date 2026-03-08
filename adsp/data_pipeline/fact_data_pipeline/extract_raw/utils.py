@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 from io import BytesIO
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -28,6 +29,50 @@ def strip_json_markdown(text: str) -> str:
     if blocks:
         return max(blocks, key=len)
     return text.strip()
+
+
+def fast_file_hash(
+    file_path: Path,
+    *,
+    sample_size: int = 1024 * 1024,
+    digest_size: int = 8,
+) -> str:
+    """Compute a fast content hash by sampling first/middle/last file regions.
+
+    The hash includes file size and sampled bytes. For small files, all bytes
+    are hashed.
+    """
+    if sample_size <= 0:
+        raise ValueError("sample_size must be > 0")
+    if digest_size <= 0:
+        raise ValueError("digest_size must be > 0")
+
+    file_size = file_path.stat().st_size
+    hasher = hashlib.blake2b(digest_size=digest_size)
+    hasher.update(str(file_size).encode("utf-8"))
+
+    with file_path.open("rb") as handle:
+        if file_size <= sample_size * 3:
+            while True:
+                chunk = handle.read(sample_size)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+        else:
+            # First sample
+            hasher.update(handle.read(sample_size))
+
+            # Middle sample
+            middle_offset = max(0, (file_size // 2) - (sample_size // 2))
+            handle.seek(middle_offset)
+            hasher.update(handle.read(sample_size))
+
+            # Tail sample
+            tail_offset = max(0, file_size - sample_size)
+            handle.seek(tail_offset)
+            hasher.update(handle.read(sample_size))
+
+    return hasher.hexdigest()
 
 
 def encode_image_base64(image_path: Path, max_bytes: Optional[int] = None) -> Tuple[str, str]:

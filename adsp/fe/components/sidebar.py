@@ -11,7 +11,7 @@ def render_sidebar(client: APIClient):
     with st.sidebar:
         # User info
         st.html(f"""
-            <div style="font-size: 2rem; font-weight: bold; color: #041524; margin-bottom: 1rem;">
+            <div style="font-size: 2rem; font-weight: bold; color: #f3f7fb; margin-bottom: 1rem;">
                 Welcome, {st.session_state.username}
             </div>
         """)

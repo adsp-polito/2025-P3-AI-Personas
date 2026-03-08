@@ -12,8 +12,14 @@ from .config import PersonaExtractionConfig
 from .extractor import VLLMOpenAIExtractor
 from .merger import PersonaMerger
 from .models import PageExtractionResult, PageImage
-from .renderer import PDFRenderer
+from .persona_hasher import (
+    compute_persona_hashes,
+    load_existing_persona_bundle,
+    merge_persona_maps,
+    write_personas_map_bundle,
+)
 from .reasoner import PersonaReasoner
+from .renderer import PDFRenderer
 
 
 class PersonaExtractionPipeline:
@@ -109,16 +115,35 @@ class PersonaExtractionPipeline:
         for result in page_results:
             self.merger.apply_page_result(result)
 
+        existing_personas_map, old_persona_hashes = load_existing_persona_bundle(
+            self.config.merged_output_path
+        )
+        merged_personas_map = merge_persona_maps(existing_personas_map, self.merger.personas)
+        persona_hashes = compute_persona_hashes(merged_personas_map)
+        for persona_id, persona_hash in persona_hashes.items():
+            merged_personas_map[persona_id]["persona_hash"] = persona_hash
+
+        self.merger.personas = merged_personas_map
+
         self.merger.write_outputs(
             self.config.merged_output_path,
             self.config.qa_report_path,
             page_results,
             persona_output_dir=self.config.persona_output_dir,
         )
+        write_personas_map_bundle(
+            self.config.merged_output_path,
+            merged_personas_map,
+            persona_hashes,
+            general_content=self.merger.general_content,
+            pages=self.merger.pages,
+        )
         self._write_page_outputs(page_results)
         return {
-            "personas": list(self.merger.personas.values()),
-            "personas_map": self.merger.personas,
+            "personas": list(merged_personas_map.values()),
+            "personas_map": merged_personas_map,
+            "old_persona_hashes": old_persona_hashes,
+            "persona_hashes": persona_hashes,
             "general_content": self.merger.general_content,
             "pages": self.merger.pages,
             "page_results": page_results,
@@ -126,12 +151,57 @@ class PersonaExtractionPipeline:
 
     def _run_reasoner(self, state: Dict[str, Any]) -> Dict[str, Any]:
         persona_map = state.get("personas_map") or self.merger.personas
-        self.reasoner.process(
-            persona_map,
-            output_dir=self.config.reasoning_output_dir,
-            reuse_cache=self.config.reuse_cache,
+        old_persona_hashes: Dict[str, str] = state.get("old_persona_hashes") or {}
+        persona_hashes: Dict[str, str] = state.get("persona_hashes") or {}
+        personas_to_reason: Dict[str, Dict[str, Any]] = {}
+        skipped_already_reasoned = 0
+        for persona_id, persona in persona_map.items():
+            current_hash = persona_hashes.get(persona_id)
+            previous_hash = old_persona_hashes.get(persona_id)
+            hash_unchanged = bool(current_hash) and current_hash == previous_hash
+            reasoned_for_hash = (
+                bool(persona.get("reasoned_for_hash")) and persona.get("reasoned_hash") == current_hash
+            )
+            if hash_unchanged and reasoned_for_hash:
+                skipped_already_reasoned += 1
+                continue
+            personas_to_reason[persona_id] = persona
+
+        if not personas_to_reason:
+            logger.info("Reasoning skipped: all personas are already reasoned for current hashes.")
+            return state
+
+        logger.info(
+            f"Running reasoning for {len(personas_to_reason)}/{len(persona_map)} personas "
+            f"(skipped unchanged+reasoned={skipped_already_reasoned})"
         )
-        return state
+        reasoned_payloads = self.reasoner.process(
+            personas_to_reason,
+            output_dir=self.config.reasoning_output_dir,
+            reuse_cache=False,
+        )
+        reasoned_persona_ids: List[str] = []
+        for persona_id in personas_to_reason:
+            if persona_id not in reasoned_payloads:
+                continue
+            persona = persona_map.get(persona_id)
+            current_hash = persona_hashes.get(persona_id)
+            if not persona or not current_hash:
+                continue
+            persona["reasoned_for_hash"] = True
+            persona["reasoned_hash"] = current_hash
+            reasoned_persona_ids.append(persona_id)
+
+        if reasoned_persona_ids:
+            write_personas_map_bundle(
+                self.config.merged_output_path,
+                persona_map,
+                persona_hashes,
+                general_content=self.merger.general_content,
+                pages=self.merger.pages,
+            )
+
+        return {**state, "reasoned_persona_ids": sorted(reasoned_persona_ids)}
 
     def _write_page_outputs(self, page_results: Sequence[PageExtractionResult]) -> None:
         path = self.config.structured_pages_output_path

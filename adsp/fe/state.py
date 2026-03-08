@@ -1,9 +1,11 @@
 """Session state management for Streamlit application."""
 
-import streamlit as st
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+import os
+from typing import List, Optional
+
+import streamlit as st
 
 
 @dataclass
@@ -40,7 +42,7 @@ def initialize_session_state():
         st.session_state.api_token = ""
     
     if "api_url" not in st.session_state:
-        st.session_state.api_url = "http://localhost:8000"
+        st.session_state.api_url = os.environ.get("ADSP_FE_API_URL", "http://localhost:8000")
     
     if "personas" not in st.session_state:
         st.session_state.personas = []

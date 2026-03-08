@@ -13,6 +13,7 @@ from adsp.app.ingestion_service import IngestionService
 from adsp.app.persona_config import PersonaConfigurationService
 from adsp.app.qa_service import QAService
 from adsp.app.report_service import ReportService
+from adsp.config import get_configured_log_level
 from adsp.communication.cache import CacheClient
 from adsp.communication.event_broker import EventBroker
 from adsp.communication.rpc import RPCClient
@@ -275,3 +276,15 @@ def test_configure_logging_sets_level():
     configure_logging(level=logging.WARNING)
     logger = logging.getLogger()
     assert logger.level == logging.WARNING
+
+
+def test_get_configured_log_level_accepts_uppercase_api_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ADSP_API_LOG_LEVEL", "ERROR")
+    monkeypatch.delenv("ADSP_LOG_LEVEL", raising=False)
+    assert get_configured_log_level() == "ERROR"
+
+
+def test_get_configured_log_level_normalizes_lowercase_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ADSP_API_LOG_LEVEL", "debug")
+    monkeypatch.delenv("ADSP_LOG_LEVEL", raising=False)
+    assert get_configured_log_level() == "DEBUG"

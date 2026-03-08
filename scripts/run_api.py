@@ -14,12 +14,49 @@ from __future__ import annotations
 import argparse
 import os
 
+from adsp.config import get_configured_log_level
+
 
 def _env_flag(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must be an integer >= 1.") from exc
+    if value < 1:
+        raise SystemExit(f"{name} must be an integer >= 1.")
+    return value
+
+
+def _normalize_uvicorn_log_level(raw: str) -> str:
+    normalized = raw.strip().lower()
+    valid_levels = {"critical", "error", "warning", "info", "debug", "trace"}
+    if normalized in valid_levels:
+        return normalized
+    raise SystemExit(
+        "Invalid log level. Use one of: CRITICAL, ERROR, WARNING, INFO, DEBUG, TRACE."
+    )
+
+
+def _resolve_worker_count(*, mode: str, reload_enabled: bool, workers: int) -> int:
+    if workers < 1:
+        raise SystemExit("ADSP_API_WORKERS must be an integer >= 1.")
+    if mode == "direct" and workers != 1:
+        print("Note: --workers is not supported in --mode direct; running with workers=1.")
+        return 1
+    if reload_enabled and workers != 1:
+        print("Note: --workers > 1 is not supported with --reload; running with workers=1.")
+        return 1
+    return workers
 
 
 def main() -> None:
@@ -51,8 +88,20 @@ def main() -> None:
         default=_env_flag("ADSP_API_DEBUG", False),
         help="Enable FastAPI debug mode (tracebacks in responses).",
     )
-    parser.add_argument("--log-level", default=os.environ.get("ADSP_API_LOG_LEVEL", "info"))
+    parser.add_argument("--log-level", default=get_configured_log_level())
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=_env_positive_int("ADSP_API_WORKERS", 1),
+        help="Number of Uvicorn worker processes (uvicorn mode only; requires --no-reload).",
+    )
     args = parser.parse_args()
+    args.log_level = _normalize_uvicorn_log_level(args.log_level)
+    args.workers = _resolve_worker_count(
+        mode=args.mode,
+        reload_enabled=args.reload,
+        workers=args.workers,
+    )
 
     os.environ["ADSP_API_DEBUG"] = "true" if args.debug else "false"
 
@@ -69,6 +118,7 @@ def main() -> None:
         host=args.host,
         port=args.port,
         reload=args.reload,
+        workers=args.workers,
         log_level=args.log_level,
     )
 

@@ -1,14 +1,18 @@
 """Script to chunk and index fact data markdown files into a RAG system."""
 
 import argparse
-import sys
 from pathlib import Path
+import sys
 
 from loguru import logger
 
-from adsp.data_pipeline.fact_data_pipeline.rag import run_fact_data_indexing_pipeline
+from adsp.data_pipeline.embedding_utils import get_configured_embedding_model_name
 from adsp.data_pipeline.fact_data_pipeline.extract_raw.config import FactDataExtractionConfig
-from adsp.data_pipeline.fact_data_pipeline.rag import documents_to_context_prompt
+from adsp.data_pipeline.fact_data_pipeline.rag import (
+    documents_to_context_prompt,
+    run_fact_data_indexing_pipeline,
+)
+
 
 def main():
     """Chunk and index fact data markdown files."""
@@ -24,8 +28,8 @@ def main():
     parser.add_argument(
         "--embedding-model",
         type=str,
-        default="sentence-transformers/all-mpnet-base-v2",
-        help="HuggingFace embedding model name",
+        default=get_configured_embedding_model_name(),
+        help="Embedding model name for the configured backend",
     )
     parser.add_argument(
         "--chunk-size",
@@ -42,8 +46,8 @@ def main():
     parser.add_argument(
         "--pattern",
         type=str,
-        default="page_*.md",
-        help="Glob pattern for markdown files (default: page_*.md)",
+        default="*.md",
+        help="Glob pattern for markdown files (default: *.md, recursive)",
     )
     parser.add_argument(
         "--top-k",

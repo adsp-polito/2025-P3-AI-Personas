@@ -12,6 +12,7 @@ from .config import FactDataExtractionConfig
 from .extractor import VLLMOpenAIExtractor
 from .models import PageExtractionResult, PageImage
 from .renderer import PDFRenderer
+from .utils import fast_file_hash
 
 
 class FactDataExtractionPipeline:
@@ -44,6 +45,7 @@ class FactDataExtractionPipeline:
     def _render_pages(self, _: Dict[str, Any]) -> Dict[str, Any]:
         if not self.config.pdf_path.exists():
             raise FileNotFoundError(f"PDF not found at {self.config.pdf_path}")
+        file_hash = fast_file_hash(self.config.pdf_path)
         logger.info("Starting fact data extraction pipeline")
         pages = self.renderer.render(
             self.config.pdf_path,
@@ -52,14 +54,16 @@ class FactDataExtractionPipeline:
             reuse_existing_images=self.config.reuse_cache,
         )
         logger.info(f"Rendered {len(pages)} pages from {self.config.pdf_path}")
+        logger.info(f"Computed fast PDF hash: {file_hash}")
 
-        return {"pages": pages}
+        return {"pages": pages, "file_hash": file_hash}
 
     def _prepare_extraction_plan(self, state: Dict[str, Any]) -> Dict[str, Any]:
         pages: Sequence[PageImage] = state["pages"]
+        file_hash: str = state["file_hash"]
         cached_results: Dict[int, PageExtractionResult] = {}
         if self.config.reuse_cache:
-            cached_results = self._load_cached_results(pages)
+            cached_results = self._load_cached_results(pages, file_hash=file_hash)
             if cached_results:
                 logger.info(
                     f"Reusing cached responses for {len(cached_results)} pages from "
@@ -97,14 +101,28 @@ class FactDataExtractionPipeline:
 
     def _write_page(self, state: Dict[str, Any]) -> Dict[str, Any]:
         page_results: Sequence[PageExtractionResult] = state["page_results"]
+        file_hash: str = state["file_hash"]
         logger.info(f"Writing markdown outputs for {len(page_results)} pages processed")
         
-        self._write_markdown_files(page_results)
+        self._write_markdown_files(page_results, file_hash=file_hash)
 
         # return the final state, which contains the page-level results
         return state
 
-    def _write_markdown_files(self, page_results: Sequence[PageExtractionResult]) -> None:
+    @staticmethod
+    def _hashed_markdown_name(file_hash: str, page_number: int) -> str:
+        return f"{file_hash}_page_{page_number}.md"
+
+    @staticmethod
+    def _legacy_markdown_names(page_number: int) -> List[str]:
+        return [f"page_{page_number:04d}.md", f"page_{page_number}.md"]
+
+    def _write_markdown_files(
+        self,
+        page_results: Sequence[PageExtractionResult],
+        *,
+        file_hash: str,
+    ) -> None:
         """Write extracted markdown content directly to data/processed/fact_data/pages directory."""
         output_dir = self.config.fact_data_output_dir / "pages"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -114,19 +132,37 @@ class FactDataExtractionPipeline:
                 logger.warning(f"Skipping page {result.page_number} due to error: {result.error}")
                 continue
             
-            output_path = output_dir / f"page_{result.page_number:04d}.md"
+            output_path = output_dir / self._hashed_markdown_name(file_hash, result.page_number)
             with output_path.open("w", encoding="utf-8") as f:
                 f.write(result.markdown_content)
             logger.debug(f"Wrote markdown for page {result.page_number} -> {output_path}")
+
+            # Remove legacy filenames for the same page to avoid duplicate indexing.
+            for legacy_name in self._legacy_markdown_names(result.page_number):
+                legacy_path = output_dir / legacy_name
+                if legacy_path.exists() and legacy_path != output_path:
+                    legacy_path.unlink()
+                    logger.debug(f"Removed legacy markdown file: {legacy_path}")
         
         logger.info(f"Wrote {len([r for r in page_results if not r.error])} markdown files to {output_dir}")
 
-    def _load_cached_results(self, pages: Sequence[PageImage]) -> Dict[int, PageExtractionResult]:
+    def _load_cached_results(
+        self,
+        pages: Sequence[PageImage],
+        *,
+        file_hash: str,
+    ) -> Dict[int, PageExtractionResult]:
         cached: Dict[int, PageExtractionResult] = {}
         for page in pages:
-            # Check markdown cache first
-            markdown_cache_path = self.config.fact_data_output_dir / "pages" / f"page_{page.page_number:04d}.md"
-            if markdown_cache_path.exists():
+            # Check markdown cache first (new hash-prefixed naming, then legacy names).
+            markdown_dir = self.config.fact_data_output_dir / "pages"
+            markdown_candidates = [
+                markdown_dir / self._hashed_markdown_name(file_hash, page.page_number),
+                *(markdown_dir / name for name in self._legacy_markdown_names(page.page_number)),
+            ]
+            for markdown_cache_path in markdown_candidates:
+                if not markdown_cache_path.exists():
+                    continue
                 try:
                     with markdown_cache_path.open("r", encoding="utf-8") as f:
                         markdown_content = f.read()
@@ -135,11 +171,13 @@ class FactDataExtractionPipeline:
                         markdown_content=markdown_content,
                         error=None,
                     )
-                    continue
+                    break
                 except Exception as exc:
                     logger.warning(
                         f"Could not load cached markdown for page {page.page_number} ({markdown_cache_path}): {exc}"
                     )
+            if page.page_number in cached:
+                continue
             
             # Fall back to old JSON cache format if it exists
             cache_path = self.config.raw_responses_dir / f"page_{page.page_number:04d}.json"

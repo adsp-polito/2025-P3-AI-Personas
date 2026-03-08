@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Iterable, List
 
 # a fundamental data structure in LangChain to represent a piece of text content along with its metadata
@@ -15,29 +16,12 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from loguru import logger
 
-from adsp.data_pipeline.embedding_utils import get_embedding_dimension
+from adsp.storage.langchain_vectorstore import build_vectorstore
+from adsp.utils.progress import progress_bar
 
 from .chunker import FactDataMarkdownChunker
 
-
-def _default_vectorstore(embeddings: Embeddings) -> VectorStore:
-    try:
-        import faiss  # type: ignore
-        from langchain_community.docstore.in_memory import InMemoryDocstore
-        from langchain_community.vectorstores import FAISS
-    except Exception as exc:
-        raise RuntimeError(
-            "FAISS vectorstore requires `faiss-cpu` and `langchain-community` to be installed."
-        ) from exc
-
-    dim = get_embedding_dimension(embeddings)
-    index = faiss.IndexFlatL2(dim)
-    return FAISS(
-        embedding_function=embeddings,
-        index=index,
-        docstore=InMemoryDocstore(),
-        index_to_docstore_id={},
-    )
+DEFAULT_INDEXING_BATCH_SIZE = 128
 
 
 class FactDataRAG:
@@ -48,11 +32,12 @@ class FactDataRAG:
         embeddings: Embeddings,
         *,
         vectorstore: VectorStore | None = None,
+        namespace: str = "fact-data",
         chunk_size: int = 1200,
         chunk_overlap: int = 50,
     ) -> None:
         self.embeddings = embeddings
-        self.vectorstore = vectorstore or _default_vectorstore(embeddings)
+        self.vectorstore = vectorstore or build_vectorstore(embeddings, namespace=namespace)
         self.chunker = FactDataMarkdownChunker(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -77,17 +62,41 @@ class FactDataRAG:
     def index_markdown_directory(
         self,
         directory: Path,
-        pattern: str = "page_*.md",
+        pattern: str = "*.md",
     ) -> List[str]:
         """Index all markdown files in a directory."""
+        start_time = time.perf_counter()
         chunks = self.chunker.chunk_directory(directory, pattern)
         
         if not chunks:
             logger.warning(f"No chunks created from {directory}")
             return []
         
-        logger.info(f"Indexing {len(chunks)} chunks into vector store")
-        return self.vectorstore.add_documents(chunks)
+        logger.info(
+            "Indexing step 1/2 complete: prepared {} chunks from {}",
+            len(chunks),
+            directory,
+        )
+        logger.info("Indexing step 2/2: writing chunks into vector store")
+        chunk_ids: List[str] = []
+        total_batches = max(1, (len(chunks) + DEFAULT_INDEXING_BATCH_SIZE - 1) // DEFAULT_INDEXING_BATCH_SIZE)
+        with progress_bar(
+            total=len(chunks),
+            desc="Indexing chunks",
+            unit="chunk",
+            leave=False,
+        ) as progress:
+            for batch_idx, start in enumerate(range(0, len(chunks), DEFAULT_INDEXING_BATCH_SIZE), start=1):
+                batch = chunks[start : start + DEFAULT_INDEXING_BATCH_SIZE]
+                chunk_ids.extend(self.vectorstore.add_documents(batch))
+                progress.update(len(batch))
+                progress.set_postfix(batch=f"{batch_idx}/{total_batches}")
+        logger.info(
+            "Indexing complete: stored {} chunks in {:.2f}s",
+            len(chunk_ids),
+            time.perf_counter() - start_time,
+        )
+        return chunk_ids
 
 
 def documents_to_context_prompt(documents: Iterable[Document]) -> str:

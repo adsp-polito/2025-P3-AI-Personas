@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
-from adsp.data_pipeline.fact_data_pipeline.extract_raw.models import PageImage
 from loguru import logger
 
 from adsp.data_pipeline.fact_data_pipeline import (
     FactDataExtractionConfig,
     run_fact_data_extraction_pipeline,
 )
+from adsp.data_pipeline.fact_data_pipeline.extract_raw.models import PageImage
 
 
 def parse_page_range(raw: str) -> Tuple[int, int]:
@@ -28,6 +29,40 @@ def parse_page_range(raw: str) -> Tuple[int, int]:
         raise argparse.ArgumentTypeError(
             "Page range must be 'start,end' with 1-based inclusive bounds."
         ) from exc
+
+
+def _document_id(pdf_path: Path) -> str:
+    normalized = "".join(ch if ch.isalnum() else "_" for ch in pdf_path.stem).strip("_")
+    return normalized or "document"
+
+
+def resolve_pdf_paths(pdf_path_raw: str) -> list[Path]:
+    candidate = Path(pdf_path_raw).expanduser()
+    if candidate.is_file():
+        if candidate.suffix.lower() != ".pdf":
+            raise ValueError(f"Expected a PDF file, got: {candidate}")
+        return [candidate]
+
+    if candidate.is_dir():
+        pdf_paths = sorted(
+            path for path in candidate.iterdir() if path.is_file() and path.suffix.lower() == ".pdf"
+        )
+        if not pdf_paths:
+            raise FileNotFoundError(f"No PDF files found in directory: {candidate}")
+        return pdf_paths
+
+    raise FileNotFoundError(f"Path does not exist: {candidate}")
+
+
+def scope_outputs_for_document(config: FactDataExtractionConfig, pdf_path: Path) -> None:
+    doc_id = _document_id(pdf_path)
+    config.page_images_dir = config.page_images_dir / doc_id
+    config.raw_responses_dir = config.raw_responses_dir / doc_id
+    config.fact_data_output_dir = config.fact_data_output_dir / doc_id
+    config.qa_report_path = config.qa_report_path.parent / doc_id / config.qa_report_path.name
+    config.structured_pages_output_path = (
+        config.structured_pages_output_path.parent / doc_id / config.structured_pages_output_path.name
+    )
 
 
 def build_config(args: argparse.Namespace) -> FactDataExtractionConfig:
@@ -56,6 +91,45 @@ def build_config(args: argparse.Namespace) -> FactDataExtractionConfig:
     return cfg
 
 
+def run_for_config(config: FactDataExtractionConfig) -> dict[str, Any]:
+    logger.info("Prepared fact data extraction configuration.")
+    logger.info(f"Using PDF: {config.pdf_path}")
+    logger.info(f"Model: {config.vllm_model} @ {config.vllm_base_url}")
+    if config.page_range:
+        logger.info(f"Page range: {config.page_range}")
+    if config.reuse_cache:
+        cache_files = (
+            list(config.raw_responses_dir.glob("page_*.json"))
+            if config.raw_responses_dir.exists()
+            else []
+        )
+        logger.info(
+            f"Cache reuse enabled; {len(cache_files)} cached page files available in "
+            f"{config.raw_responses_dir}"
+        )
+    else:
+        logger.info("Cache reuse disabled; existing cached pages will be ignored.")
+
+    logger.info("Starting fact data extraction run...")
+    result = run_fact_data_extraction_pipeline(config)
+    logger.info("Fact data extraction pipeline finished.")
+    fact_data = result.get("pages", [])
+    page_numbers = [p.page_number for p in fact_data if isinstance(p, PageImage)]
+    logger.info(f"Fact Data extracted: {page_numbers}")
+    return {
+        "pdf_path": str(config.pdf_path),
+        "page_numbers": page_numbers,
+        "pages_processed": [r.page_number for r in result["page_results"]],
+        "pages_with_content": [
+            r.page_number
+            for r in result["page_results"]
+            if r.markdown_content and r.markdown_content.strip() and not r.error
+        ],
+        "markdown_output_dir": str(config.fact_data_output_dir / "pages"),
+        "cache_dir": str(config.raw_responses_dir),
+    }
+
+
 def main(raw_args: Optional[list[str]] = None) -> None:
     default_cfg = FactDataExtractionConfig()
     parser = argparse.ArgumentParser(description="Run fact data extraction pipeline.")
@@ -63,7 +137,7 @@ def main(raw_args: Optional[list[str]] = None) -> None:
         "--pdf-path",
         type=str,
         default=str(default_cfg.pdf_path),
-        help="Path to PDF to process.",
+        help="Path to a PDF file or to a directory containing PDF files.",
     )
     parser.add_argument(
         "--page-range",
@@ -166,7 +240,7 @@ def main(raw_args: Optional[list[str]] = None) -> None:
         "--fact-data-output-dir",
         type=str,
         default=str(default_cfg.fact_data_output_dir),
-        help="Directory to store individual fact data JSON files.",
+        help="Directory to store extracted fact data files.",
     )
     parser.add_argument(
         "--qa-report-path",
@@ -188,44 +262,22 @@ def main(raw_args: Optional[list[str]] = None) -> None:
     )
     args = parser.parse_args(raw_args)
 
-    config = build_config(args)
-    logger.info("Prepared fact data extraction configuration.")
-    logger.info(f"Using PDF: {config.pdf_path}")
-    logger.info(f"Model: {config.vllm_model} @ {config.vllm_base_url}")
-    if config.page_range:
-        logger.info(f"Page range: {config.page_range}")
-    if config.reuse_cache:
-        cache_files = (
-            list(config.raw_responses_dir.glob("page_*.json"))
-            if config.raw_responses_dir.exists()
-            else []
-        )
-        logger.info(
-            f"Cache reuse enabled; {len(cache_files)} cached page files available in "
-            f"{config.raw_responses_dir}"
-        )
-    else:
-        logger.info("Cache reuse disabled; existing cached pages will be ignored.")
+    pdf_input = Path(args.pdf_path).expanduser()
+    pdf_paths = resolve_pdf_paths(args.pdf_path)
+    base_config = build_config(args)
+    use_scoped_outputs = pdf_input.is_dir()
 
-    logger.info("Starting fact data extraction run...")
-    result = run_fact_data_extraction_pipeline(config)
-    logger.info("Fact data extraction pipeline finished.")
-    print(result)
-    fact_data = result.get("pages", [])
-    page_numbers = [p.page_number for p in fact_data if isinstance(p, PageImage)]
-    logger.info(f"Fact Data extracted: {page_numbers}")
-    summary = {
-        "page_numbers": page_numbers,
-        "pages_processed": [r.page_number for r in result["page_results"]],
-        "pages_with_content": [
-            r.page_number
-            for r in result["page_results"]
-            if r.markdown_content and r.markdown_content.strip() and not r.error
-        ],
-        "markdown_output_dir": str(config.fact_data_output_dir / "pages"),
-        "cache_dir": str(config.raw_responses_dir),
-    }
-    print(json.dumps(summary, indent=2))
+    if len(pdf_paths) > 1:
+        logger.info(f"Detected {len(pdf_paths)} PDF files in {pdf_input}")
+
+    summaries: list[dict[str, Any]] = []
+    for pdf_path in pdf_paths:
+        config = copy.deepcopy(base_config)
+        config.pdf_path = pdf_path
+        if use_scoped_outputs:
+            scope_outputs_for_document(config, pdf_path)
+        summaries.append(run_for_config(config))
+
 
 
 if __name__ == "__main__":
