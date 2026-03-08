@@ -1,4 +1,5 @@
 faiss-cpu==1.13.2
+Faker==40.8.0
 fastapi==0.124.4
 langchain-community==0.4.1
 langchain-core==1.2.7

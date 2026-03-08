@@ -1,5 +1,6 @@
 """RAG helper and embedding tests."""
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -348,6 +349,35 @@ class _FakePersistedStore:
         path_obj.mkdir(parents=True, exist_ok=True)
         (path_obj / "index.faiss").write_text("stub", encoding="utf-8")
         self.saved_paths.append(path)
+
+
+def test_vectorstore_provider_uses_writable_fallback_when_primary_is_read_only(tmp_path: Path):
+    emb = HashEmbeddings()
+    provider = VectorStoreProvider(
+        embeddings=emb,
+        config=VectorStoreConfig(
+            backend="faiss",
+            persist_dir=tmp_path,
+            collection_prefix="adsp",
+        ),
+    )
+    store = _FakePersistedStore()
+
+    primary = provider._faiss_dir("fact-data")
+    primary.mkdir(parents=True, exist_ok=True)
+    primary.chmod(0o555)
+
+    try:
+        provider.persist("fact-data", fingerprint="fingerprint-1", vectorstore=store)
+        assert provider._faiss_read_dirs("fact-data")[0] == provider._faiss_fallback_dir("fact-data")
+    finally:
+        primary.chmod(0o755)
+
+    assert store.saved_paths
+    assert Path(store.saved_paths[-1]) == provider._faiss_fallback_dir("fact-data")
+    assert (provider._faiss_fallback_dir("fact-data") / "index.faiss").exists()
+    assert provider._manifest_path("fact-data").exists()
+    assert str(provider._faiss_fallback_dir("fact-data")).endswith(f"uid-{os.getuid()}/adsp-fact-data")
 
 
 def test_vectorstore_provider_loads_persisted_store_when_fingerprint_matches(tmp_path: Path, monkeypatch):

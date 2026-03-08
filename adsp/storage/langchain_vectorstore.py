@@ -175,7 +175,7 @@ class VectorStoreProvider:
             raise KeyError(f"Vector store for namespace {namespace!r} is not initialized")
 
         if self.config.backend == "faiss":
-            path = self._faiss_dir(namespace)
+            path = self._faiss_write_dir(namespace)
             if path.exists():
                 shutil.rmtree(path)
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,20 +188,24 @@ class VectorStoreProvider:
 
     def _load_persisted(self, namespace: str) -> VectorStore | None:
         if self.config.backend == "faiss":
-            path = self._faiss_dir(namespace)
-            if not path.exists():
-                return None
             try:
                 from langchain_community.vectorstores import FAISS
             except Exception as exc:
                 raise RuntimeError(
                     "FAISS vector store requires `faiss-cpu` and `langchain-community` to be installed."
                 ) from exc
-            return FAISS.load_local(
-                str(path),
-                self.embeddings,
-                allow_dangerous_deserialization=True,
-            )
+            for path in self._faiss_read_dirs(namespace):
+                if not path.exists():
+                    continue
+                try:
+                    return FAISS.load_local(
+                        str(path),
+                        self.embeddings,
+                        allow_dangerous_deserialization=True,
+                    )
+                except PermissionError:
+                    continue
+            return None
 
         return build_vectorstore(
             self.embeddings,
@@ -221,6 +225,34 @@ class VectorStoreProvider:
     def _faiss_dir(self, namespace: str) -> Path:
         collection_name = build_collection_name(namespace=namespace, config=self.config)
         return self.config.persist_dir / "faiss" / collection_name
+
+    def _faiss_fallback_dir(self, namespace: str) -> Path:
+        collection_name = build_collection_name(namespace=namespace, config=self.config)
+        return self.config.persist_dir / "faiss_fallback" / f"uid-{os.getuid()}" / collection_name
+
+    def _faiss_read_dirs(self, namespace: str) -> list[Path]:
+        primary = self._faiss_dir(namespace)
+        fallback = self._faiss_fallback_dir(namespace)
+        if primary == fallback:
+            return [primary]
+        if self._is_dir_writable(primary):
+            return [primary, fallback]
+        return [fallback, primary]
+
+    def _faiss_write_dir(self, namespace: str) -> Path:
+        primary = self._faiss_dir(namespace)
+        if self._is_dir_writable(primary):
+            return primary
+        return self._faiss_fallback_dir(namespace)
+
+    @staticmethod
+    def _is_dir_writable(path: Path) -> bool:
+        probe = path
+        while not probe.exists():
+            if probe.parent == probe:
+                return False
+            probe = probe.parent
+        return os.access(probe, os.W_OK | os.X_OK)
 
     def _read_manifest(self, namespace: str) -> dict | None:
         path = self._manifest_path(namespace)

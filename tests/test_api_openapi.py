@@ -2,7 +2,6 @@
 
 import pytest as pytest
 
-
 fastapi = pytest.importorskip('fastapi')
 unused_fastapi = fastapi
 
@@ -17,6 +16,14 @@ API_PATHS = [
     '/v1/' 'chat',
     '/v1/ingestion/upload',
     '/v1/reports/{persona_id}',
+    '/api/surveys',
+    '/api/surveys/{survey_id}',
+    '/api/groups',
+    '/api/groups/countries',
+    '/api/groups/{group_id}',
+    '/api/surveys/{survey_id}/simulate',
+    '/api/surveys/{survey_id}/responses',
+    '/api/surveys/{survey_id}/statistics',
 ]
 
 
@@ -84,3 +91,15 @@ def test_schema_has_info_block():
 def test_schema_has_openapi_version():
     schema = _schema()
     assert isinstance(schema.get('openapi'), str)
+
+
+def test_survey_and_group_paths_expose_get_and_post():
+    paths = _paths()
+
+    assert 'get' in paths['/api/surveys']
+    assert 'post' in paths['/api/surveys']
+
+    assert 'get' in paths['/api/groups']
+    assert 'post' in paths['/api/groups']
+
+    assert 'get' in paths['/api/surveys/{survey_id}/statistics']

@@ -26,4 +26,14 @@ For the authoritative schema, use `/openapi.json`. The key routes are:
 - `POST /v1/chat`
 - `POST /v1/ingestion/upload`
 - `POST /v1/reports/{persona_id}`
+- `GET /api/surveys`
+- `POST /api/surveys`
+- `GET /api/surveys/{survey_id}`
+- `GET /api/groups`
+- `POST /api/groups`
+- `GET /api/groups/countries`
+- `GET /api/groups/{group_id}`
+- `POST /api/surveys/{survey_id}/simulate`
+- `GET /api/surveys/{survey_id}/responses`
 
+All request/response fields now expose descriptions and examples directly in Swagger UI.
