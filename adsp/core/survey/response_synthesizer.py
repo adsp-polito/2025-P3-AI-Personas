@@ -325,9 +325,12 @@ class ResponseSynthesizer:
         if format_normalized not in {"csv", "json"}:
             raise ValueError("format must be either 'csv' or 'json'")
 
-        source = simulation_dir / f"responses.{format_normalized}"
-        if not source.exists():
-            raise FileNotFoundError(f"Response export not found: {source}")
+        details = self.get_response_details(survey_id, simulation_id=chosen_simulation)
+        source = simulation_dir / f"responses_export.{format_normalized}"
+        if format_normalized == "json":
+            save_json(source, details)
+        else:
+            self._write_export_csv(source, details)
 
         if output_path is None:
             return str(source)
@@ -370,6 +373,60 @@ class ResponseSynthesizer:
         for item in payload:
             responses.append(validate_survey_response(item))
         return responses
+
+    def get_response_details(
+        self,
+        survey_id: str,
+        *,
+        simulation_id: str | None = None,
+    ) -> Dict[str, Any]:
+        chosen_simulation = simulation_id or self._latest_simulation_id(survey_id)
+        survey = self.surveys.get_survey(survey_id)
+        simulation = self.get_simulation_result(survey_id, chosen_simulation)
+        if simulation.status != "completed":
+            raise RuntimeError(f"Simulation '{chosen_simulation}' is not completed yet")
+
+        group = self.groups.get_group(simulation.group_id)
+        responses = self.get_responses(survey_id, chosen_simulation)
+
+        question_by_id = {question.question_id: question for question in survey.questions}
+        respondent_by_id = {respondent.respondent_id: respondent for respondent in group.respondents}
+
+        items: List[Dict[str, Any]] = []
+        for response in responses:
+            respondent = respondent_by_id.get(response.respondent_id)
+            answers_payload: List[Dict[str, Any]] = []
+            for answer in response.answers:
+                question = question_by_id.get(answer.question_id)
+                answers_payload.append(
+                    {
+                        "question_id": answer.question_id,
+                        "question_text": question.text if question is not None else answer.question_id,
+                        "answer_type": answer.answer_type,
+                        "value": answer.value,
+                        "confidence": answer.confidence,
+                        "reasoning": answer.reasoning,
+                    }
+                )
+
+            items.append(
+                {
+                    "response_id": response.response_id,
+                    "respondent_id": response.respondent_id,
+                    "respondent_name": respondent.name if respondent is not None else None,
+                    "persona_id": respondent.persona_id if respondent is not None else None,
+                    "completed_at": response.completed_at.astimezone(timezone.utc).isoformat(),
+                    "answers": answers_payload,
+                }
+            )
+
+        return {
+            "survey_id": survey.survey_id,
+            "simulation_id": chosen_simulation,
+            "group_id": simulation.group_id,
+            "total_responses": len(items),
+            "responses": items,
+        }
 
     def statistics_cache_path(self, survey_id: str, simulation_id: str) -> Path:
         return self.responses_dir / survey_id / simulation_id / "statistics.json"
@@ -752,6 +809,72 @@ class ResponseSynthesizer:
     ) -> None:
         simulation_dir = ensure_dir(self.responses_dir / survey_id / simulation_id)
         save_json(simulation_dir / "simulation.json", model_dump(result))
+
+    @staticmethod
+    def _response_export_rows(details: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        survey_id = details.get("survey_id")
+        simulation_id = details.get("simulation_id")
+        group_id = details.get("group_id")
+
+        responses = details.get("responses", [])
+        if not isinstance(responses, list):
+            return rows
+
+        for response in responses:
+            if not isinstance(response, Mapping):
+                continue
+
+            for answer in response.get("answers", []):
+                if not isinstance(answer, Mapping):
+                    continue
+                rows.append(
+                    {
+                        "response_id": response.get("response_id"),
+                        "survey_id": survey_id,
+                        "simulation_id": simulation_id,
+                        "group_id": group_id,
+                        "respondent_id": response.get("respondent_id"),
+                        "respondent_name": response.get("respondent_name"),
+                        "persona_id": response.get("persona_id"),
+                        "completed_at": response.get("completed_at"),
+                        "question_id": answer.get("question_id"),
+                        "question_text": answer.get("question_text"),
+                        "answer_type": answer.get("answer_type"),
+                        "value": answer.get("value"),
+                        "confidence": answer.get("confidence"),
+                        "reasoning": answer.get("reasoning") or "",
+                    }
+                )
+
+        return rows
+
+    def _write_export_csv(self, path: Path, details: Mapping[str, Any]) -> None:
+        ensure_dir(path.parent)
+        rows = self._response_export_rows(details)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "response_id",
+                    "survey_id",
+                    "simulation_id",
+                    "group_id",
+                    "respondent_id",
+                    "respondent_name",
+                    "persona_id",
+                    "completed_at",
+                    "question_id",
+                    "question_text",
+                    "answer_type",
+                    "value",
+                    "confidence",
+                    "reasoning",
+                ],
+            )
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
 
     def _write_csv(self, path: Path, responses: List[SurveyResponse]) -> None:
         ensure_dir(path.parent)

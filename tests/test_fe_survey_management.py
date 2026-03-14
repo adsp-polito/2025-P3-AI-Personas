@@ -3,11 +3,13 @@
 import altair as alt
 
 from adsp.fe.components.survey_management import (
+    _answer_question_label,
     _choice_chart_rows,
     _has_processing_simulations,
     _multiple_choice_pie_chart,
     _rating_chart_rows,
     _rating_bar_chart,
+    _response_detail_title,
 )
 
 
@@ -73,3 +75,26 @@ def test_rating_bar_chart_returns_altair_chart():
     )
 
     assert isinstance(chart, alt.Chart)
+
+
+def test_response_detail_title_includes_persona_id_and_name():
+    title = _response_detail_title(
+        {
+            "respondent_id": "group-1-resp-00001",
+            "persona_id": "curious-connoisseurs",
+            "respondent_name": "Alice Example",
+        }
+    )
+
+    assert title == "group-1-resp-00001 | Persona: curious-connoisseurs | Alice Example"
+
+
+def test_answer_question_label_prefers_question_text():
+    label = _answer_question_label(
+        {
+            "question_id": "q2",
+            "question_text": "How likely are you to try a new blend?",
+        }
+    )
+
+    assert label == "q2. How likely are you to try a new blend?"

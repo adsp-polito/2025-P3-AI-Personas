@@ -1,5 +1,6 @@
 """Response synthesizer unit tests."""
 
+import csv
 from concurrent.futures import ThreadPoolExecutor as StdThreadPoolExecutor
 import json
 from pathlib import Path
@@ -154,12 +155,38 @@ def test_run_simulation_and_export(tmp_path: Path):
     assert len(responses) == 2
     assert len(responses[0].answers) == 3
 
+    details = synthesizer.get_response_details(
+        survey_id=survey.survey_id,
+        simulation_id=result.simulation_id,
+    )
+    assert details["survey_id"] == survey.survey_id
+    assert details["simulation_id"] == result.simulation_id
+    assert details["group_id"] == group.group_id
+    assert details["total_responses"] == 2
+    assert details["responses"][0]["persona_id"] == "test-persona"
+    assert details["responses"][0]["answers"][0]["question_text"] == "Which option do you prefer?"
+
     csv_path = synthesizer.export_responses(
         survey_id=survey.survey_id,
         simulation_id=result.simulation_id,
         format="csv",
     )
     assert Path(csv_path).exists()
+    with Path(csv_path).open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows
+    assert rows[0]["persona_id"] == "test-persona"
+    assert rows[0]["question_text"] == "Which option do you prefer?"
+
+    json_path = synthesizer.export_responses(
+        survey_id=survey.survey_id,
+        simulation_id=result.simulation_id,
+        format="json",
+    )
+    assert Path(json_path).exists()
+    export_payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    assert export_payload["responses"][0]["persona_id"] == "test-persona"
+    assert export_payload["responses"][0]["answers"][0]["question_text"] == "Which option do you prefer?"
 
     stats = synthesizer.compute_response_statistics(
         survey_id=survey.survey_id,

@@ -98,6 +98,12 @@ def initialize_session_state():
     if "active_statistics_simulation_id" not in st.session_state:
         st.session_state.active_statistics_simulation_id = None
 
+    if "survey_response_details_cache" not in st.session_state:
+        st.session_state.survey_response_details_cache = {}
+
+    if "active_response_details_simulation_id" not in st.session_state:
+        st.session_state.active_response_details_simulation_id = None
+
     if "show_simulation_form" not in st.session_state:
         st.session_state.show_simulation_form = False
 
@@ -132,6 +138,7 @@ def reset_management_ui_state() -> None:
     st.session_state.show_download_form_simulation_id = None
     st.session_state.prepared_download_payload = None
     st.session_state.active_statistics_simulation_id = None
+    st.session_state.active_response_details_simulation_id = None
 
 
 def get_active_session() -> Optional[ChatSession]:

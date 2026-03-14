@@ -153,6 +153,76 @@ class SimulateSurveyResponse(BaseModel):
     estimated_time_minutes: int = Field(description="Estimated completion time in minutes.")
 
 
+class SimulationResponseAnswerDetail(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "question_id": "q1",
+                "question_text": "Which product claim matters most?",
+                "answer_type": "choice",
+                "value": "Great taste",
+                "confidence": 0.92,
+                "reasoning": "Taste is the main purchase driver for this respondent.",
+            }
+        }
+    )
+
+    question_id: str = Field(description="Question identifier.")
+    question_text: str = Field(description="Question text copied from the survey definition.")
+    answer_type: str = Field(description="Answer type for this question.")
+    value: Any = Field(description="Raw answer value.")
+    confidence: float = Field(description="Confidence score produced during synthesis.")
+    reasoning: Optional[str] = Field(default=None, description="Optional answer reasoning text.")
+
+
+class SimulationResponseDetail(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "response_id": "resp-1234abcd",
+                "respondent_id": "group-1-resp-00001",
+                "respondent_name": "Alice Example",
+                "persona_id": "curious-connoisseurs",
+                "completed_at": "2026-03-14T20:15:02+00:00",
+                "answers": [],
+            }
+        }
+    )
+
+    response_id: str = Field(description="Response identifier.")
+    respondent_id: str = Field(description="Respondent identifier.")
+    respondent_name: Optional[str] = Field(default=None, description="Respondent display name when available.")
+    persona_id: Optional[str] = Field(default=None, description="Persona identifier for the respondent.")
+    completed_at: str = Field(description="Completion timestamp in ISO-8601 format.")
+    answers: List[SimulationResponseAnswerDetail] = Field(
+        default_factory=list,
+        description="Question-level answers for this response.",
+    )
+
+
+class SimulationResponseDetailsResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "survey_id": "coffee-pref-2026-q1",
+                "simulation_id": "sim-1234abcd",
+                "group_id": "group-ab12cd34",
+                "total_responses": 40,
+                "responses": [],
+            }
+        }
+    )
+
+    survey_id: str = Field(description="Survey identifier.")
+    simulation_id: str = Field(description="Simulation identifier.")
+    group_id: str = Field(description="Respondent group used for the simulation.")
+    total_responses: int = Field(description="Total number of detailed responses returned.")
+    responses: List[SimulationResponseDetail] = Field(
+        default_factory=list,
+        description="Detailed simulated responses enriched with respondent and question metadata.",
+    )
+
+
 class DistributionEntry(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={"example": {"value": "Great taste", "count": 18, "percentage": 0.45}}
@@ -399,6 +469,34 @@ def register_survey_routes(
             progress={"completed": result.completed, "pending": result.pending},
             estimated_time_minutes=estimated_minutes,
         )
+
+    @app.get(
+        "/api/surveys/{survey_id}/response-details",
+        response_model=SimulationResponseDetailsResponse,
+        tags=["survey"],
+        summary="Get Simulation Response Details",
+        description="Returns structured response documents for a survey simulation.",
+    )
+    def get_simulation_response_details(
+        survey_id: str = Path(description="Survey identifier for response details.", examples=["coffee-pref-2026-q1"]),
+        simulation_id: Optional[str] = Query(
+            default=None,
+            description="Specific simulation identifier. Defaults to the latest simulation when omitted.",
+        ),
+        services: Any = Depends(get_services),
+    ) -> SimulationResponseDetailsResponse:
+        try:
+            payload = services.responses.get_response_details(
+                survey_id=survey_id,
+                simulation_id=simulation_id,
+            )
+            return SimulationResponseDetailsResponse(**payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Unable to load response details: {exc}") from exc
 
     @app.get(
         "/api/surveys/{survey_id}/responses",

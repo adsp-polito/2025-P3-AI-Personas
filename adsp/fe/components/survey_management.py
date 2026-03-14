@@ -714,6 +714,27 @@ def _rating_bar_chart(rows: List[Dict[str, Any]]) -> alt.Chart:
     )
 
 
+def _response_detail_title(response: Dict[str, Any]) -> str:
+    respondent_id = str(response.get("respondent_id", "unknown")).strip() or "unknown"
+    persona_id = str(response.get("persona_id", "")).strip()
+    respondent_name = str(response.get("respondent_name", "")).strip()
+
+    parts = [respondent_id]
+    if persona_id:
+        parts.append(f"Persona: {persona_id}")
+    if respondent_name:
+        parts.append(respondent_name)
+    return " | ".join(parts)
+
+
+def _answer_question_label(answer: Dict[str, Any]) -> str:
+    question_id = str(answer.get("question_id", "?")).strip() or "?"
+    question_text = str(answer.get("question_text", "")).strip()
+    if question_text:
+        return f"{question_id}. {question_text}"
+    return question_id
+
+
 def _render_statistics_payload(stats: Dict[str, Any]) -> None:
     st.markdown("### Simulation Statistics")
     st.caption(
@@ -760,6 +781,69 @@ def _render_statistics_payload(stats: Dict[str, Any]) -> None:
                 st.json(question.get("sample_text_responses", []))
 
 
+def _render_response_value(value: Any) -> None:
+    if value is None or value == "":
+        st.caption("n/a")
+        return
+    if isinstance(value, (dict, list)):
+        st.json(value)
+        return
+    st.write(value)
+
+
+def _render_response_details_payload(payload: Dict[str, Any]) -> None:
+    st.markdown("### Response Details")
+    st.caption(
+        " | ".join(
+            [
+                f"Survey ID: {payload.get('survey_id', 'n/a')}",
+                f"Simulation ID: {payload.get('simulation_id', 'n/a')}",
+                f"Group ID: {payload.get('group_id', 'n/a')}",
+                f"Responses: {payload.get('total_responses', 0)}",
+            ]
+        )
+    )
+
+    responses = payload.get("responses", [])
+    if not responses:
+        st.caption("No detailed responses available.")
+        return
+
+    for response in responses:
+        with st.expander(_response_detail_title(response), expanded=False):
+            st.caption(
+                " | ".join(
+                    [
+                        f"Response ID: {response.get('response_id', 'n/a')}",
+                        f"Completed: {response.get('completed_at', 'n/a')}",
+                    ]
+                )
+            )
+
+            answers = response.get("answers", [])
+            if not answers:
+                st.caption("No answers in this response.")
+                continue
+
+            for answer in answers:
+                with st.container(border=True):
+                    st.markdown(f"**{_answer_question_label(answer)}**")
+                    st.caption(
+                        " | ".join(
+                            [
+                                f"Answer type: {answer.get('answer_type', 'n/a')}",
+                                f"Confidence: {_safe_float(answer.get('confidence', 0.0)):.2f}",
+                            ]
+                        )
+                    )
+                    st.markdown("**Answer**")
+                    _render_response_value(answer.get("value"))
+
+                    reasoning = str(answer.get("reasoning", "")).strip()
+                    if reasoning:
+                        st.markdown(f"**Reasoning**\n\n{reasoning}")
+
+
 def _has_processing_simulations(payload: Dict[str, Any]) -> bool:
     simulations = payload.get("simulations", []) if isinstance(payload, dict) else []
     for simulation in simulations:
@@ -770,12 +854,13 @@ def _has_processing_simulations(payload: Dict[str, Any]) -> bool:
     return False
 
 
-def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_refresh: bool) -> None:
-    payload = client.get_survey(survey_id)
-    if not payload:
-        st.error("Unable to load survey details.")
-        return
-
+def _render_survey_simulations_payload(
+    client: APIClient,
+    survey_id: str,
+    *,
+    payload: Dict[str, Any],
+    auto_refresh: bool,
+) -> None:
     st.markdown("### Simulations")
     if auto_refresh:
         st.caption("Live progress refreshes every 1 second while simulations are running.")
@@ -844,9 +929,13 @@ def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_r
     stats_cache_key = f"{survey_id}"
     if stats_cache_key not in st.session_state.survey_stats_cache:
         st.session_state.survey_stats_cache[stats_cache_key] = {}
+    response_details_cache_key = f"{survey_id}"
+    if response_details_cache_key not in st.session_state.survey_response_details_cache:
+        st.session_state.survey_response_details_cache[response_details_cache_key] = {}
 
     has_processing = False
     active_stats_id = st.session_state.get("active_statistics_simulation_id")
+    active_response_details_id = st.session_state.get("active_response_details_simulation_id")
     for simulation in simulations:
         simulation_id = simulation.get("simulation_id", "")
         if not simulation_id:
@@ -876,15 +965,9 @@ def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_r
             )
             st.progress(progress_ratio, text=f"Progress: {int(round(progress_ratio * 100))}%")
 
-            action_col_1, action_col_2 = st.columns(2)
+            action_col_1, action_col_2, action_col_3 = st.columns(3)
 
             with action_col_1:
-                if st.button("Download", key=f"download_sim_{simulation_id}", width="stretch"):
-                    st.session_state.show_download_form_simulation_id = simulation_id
-                    st.session_state.prepared_download_payload = None
-                    st.rerun()
-
-            with action_col_2:
                 if st.button("Statistics", key=f"stats_sim_{simulation_id}", width="stretch"):
                     with st.spinner("Computing simulation statistics..."):
                         stats = client.compute_simulation_statistics(
@@ -897,6 +980,43 @@ def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_r
                         st.success("Statistics ready")
                         st.rerun()
                     st.error("Unable to compute statistics")
+
+            with action_col_2:
+                response_button_label = (
+                    "Hide Responses"
+                    if simulation_id == active_response_details_id
+                    else "Responses"
+                )
+                if st.button(
+                    response_button_label,
+                    key=f"responses_sim_{simulation_id}",
+                    width="stretch",
+                ):
+                    if simulation_id == active_response_details_id:
+                        st.session_state.active_response_details_simulation_id = None
+                        st.rerun()
+
+                    details = st.session_state.survey_response_details_cache.get(
+                        response_details_cache_key,
+                        {},
+                    ).get(simulation_id)
+                    if not isinstance(details, dict):
+                        with st.spinner("Loading response details..."):
+                            details = client.get_simulation_response_details(
+                                survey_id=survey_id,
+                                simulation_id=simulation_id,
+                            )
+                    if details:
+                        st.session_state.survey_response_details_cache[response_details_cache_key][simulation_id] = details
+                        st.session_state.active_response_details_simulation_id = simulation_id
+                        st.rerun()
+                    st.error("Unable to load response details")
+
+            with action_col_3:
+                if st.button("Download", key=f"download_sim_{simulation_id}", width="stretch"):
+                    st.session_state.show_download_form_simulation_id = simulation_id
+                    st.session_state.prepared_download_payload = None
+                    st.rerun()
 
             if st.session_state.show_download_form_simulation_id == simulation_id:
                 with st.container(border=True):
@@ -947,6 +1067,14 @@ def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_r
                                 width="stretch",
                             )
 
+            response_details = st.session_state.survey_response_details_cache.get(
+                response_details_cache_key,
+                {},
+            ).get(simulation_id)
+            if simulation_id == active_response_details_id and isinstance(response_details, dict):
+                st.markdown("---")
+                _render_response_details_payload(response_details)
+
             stats = st.session_state.survey_stats_cache.get(stats_cache_key, {}).get(simulation_id)
             if simulation_id == active_stats_id and isinstance(stats, dict):
                 st.markdown("---")
@@ -954,6 +1082,20 @@ def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_r
 
     if auto_refresh and not has_processing:
         st.rerun()
+
+
+def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_refresh: bool) -> None:
+    payload = client.get_survey(survey_id)
+    if not payload:
+        st.error("Unable to load survey details.")
+        return
+
+    _render_survey_simulations_payload(
+        client,
+        survey_id,
+        payload=payload,
+        auto_refresh=auto_refresh,
+    )
 
 
 def render_survey_detail_page(client: APIClient) -> None:
@@ -1004,8 +1146,16 @@ def render_survey_detail_page(client: APIClient) -> None:
 
     st.markdown("---")
     auto_refresh = _has_processing_simulations(payload)
-    simulations_fragment = st.fragment(
-        _render_survey_simulations_body,
-        run_every="1s" if auto_refresh else None,
-    )
-    simulations_fragment(client, survey_id, auto_refresh=auto_refresh)
+    if auto_refresh:
+        simulations_fragment = st.fragment(
+            _render_survey_simulations_body,
+            run_every="1s",
+        )
+        simulations_fragment(client, survey_id, auto_refresh=True)
+    else:
+        _render_survey_simulations_payload(
+            client,
+            survey_id,
+            payload=payload,
+            auto_refresh=False,
+        )

@@ -22,6 +22,7 @@ API_PATHS = [
     '/api/groups/countries',
     '/api/groups/{group_id}',
     '/api/surveys/{survey_id}/simulate',
+    '/api/surveys/{survey_id}/response-details',
     '/api/surveys/{survey_id}/responses',
     '/api/surveys/{survey_id}/statistics',
 ]
@@ -139,6 +140,7 @@ def test_survey_and_group_paths_expose_get_and_post():
     assert 'get' in paths['/api/groups']
     assert 'post' in paths['/api/groups']
 
+    assert 'get' in paths['/api/surveys/{survey_id}/response-details']
     assert 'get' in paths['/api/surveys/{survey_id}/statistics']
 
 
@@ -162,3 +164,17 @@ def test_group_schemas_include_optional_group_name():
     assert 'group_name' in create_response['properties']
     assert 'group_name' in fetch_response['properties']
     assert 'group_name' in list_item_response['properties']
+
+
+def test_response_detail_schema_includes_persona_and_question_text():
+    schema = _schema()
+    components = schema.get('components', {})
+    schemas = components.get('schemas', {})
+
+    response_details = schemas['SimulationResponseDetailsResponse']
+    response_item = schemas['SimulationResponseDetail']
+    answer_item = schemas['SimulationResponseAnswerDetail']
+
+    assert 'responses' in response_details['properties']
+    assert 'persona_id' in response_item['properties']
+    assert 'question_text' in answer_item['properties']

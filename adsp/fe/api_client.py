@@ -383,6 +383,30 @@ class APIClient:
             print(f"Error downloading simulation responses: {e}")
             return None
 
+    def get_simulation_response_details(
+        self,
+        survey_id: str,
+        simulation_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch structured response details for a simulation."""
+        try:
+            params: Dict[str, Any] = {}
+            if simulation_id:
+                params["simulation_id"] = simulation_id
+
+            response = requests.get(
+                f"{self.base_url}/api/surveys/{survey_id}/response-details",
+                params=params,
+                headers=self._get_headers(),
+                timeout=(5, 300),
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error fetching simulation response details: {e}")
+            return None
+
     def compute_simulation_statistics(
         self,
         survey_id: str,
