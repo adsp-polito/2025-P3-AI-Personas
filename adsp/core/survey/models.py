@@ -82,10 +82,18 @@ class RespondentGroup(BaseModel):
     """A generated cohort of respondents."""
 
     group_id: str
+    group_name: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     composition: List[PersonaConfig] = Field(default_factory=list)
     respondents: List[RespondentProfile] = Field(default_factory=list)
     generation_method: Literal["random", "llm", "hybrid"] = "random"
+
+    @validator("group_name", pre=True, always=True)
+    def _normalize_group_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
 
 class Answer(BaseModel):

@@ -147,6 +147,7 @@ class APIClient:
     def create_group(
         self,
         composition: List[Dict[str, Any]],
+        group_name: Optional[str] = None,
         mode: str = "random",
         sampling_ratio: float = 0.7,
         include_names: bool = True,
@@ -161,6 +162,8 @@ class APIClient:
                 "sampling_ratio": sampling_ratio,
                 "include_names": include_names,
             }
+            if group_name is not None:
+                payload["group_name"] = group_name
             if countries is not None:
                 payload["countries"] = countries
             if seed is not None:

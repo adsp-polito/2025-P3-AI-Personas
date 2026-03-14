@@ -113,6 +113,7 @@ class GroupGenerator:
         rng = random.Random(base_seed)
 
         group_id = str(options.get("group_id") or make_identifier("group", rng=rng))
+        group_name = self._normalize_group_name(options.get("group_name"))
         respondents: List[RespondentProfile] = []
 
         for config in configs:
@@ -135,6 +136,7 @@ class GroupGenerator:
 
         group = RespondentGroup(
             group_id=group_id,
+            group_name=group_name,
             created_at=utc_now(),
             composition=configs,
             respondents=respondents,
@@ -306,6 +308,13 @@ class GroupGenerator:
 
     def _legacy_group_path(self, group_id: str) -> Path:
         return self.groups_dir / f"{group_id}.json"
+
+    @staticmethod
+    def _normalize_group_name(value: Any) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
 
     def _load_traits(self, persona_id: str) -> Dict[str, Any]:
         for directory in self._traits_dirs:

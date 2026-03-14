@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional
 
+import altair as alt
 import streamlit as st
 
 from adsp.fe.api_client import APIClient
@@ -89,6 +90,24 @@ def _composition_text(composition: List[Dict[str, Any]]) -> str:
     return ", ".join(parts)
 
 
+def _group_title(group: Dict[str, Any]) -> str:
+    group_name = str(group.get("group_name", "")).strip()
+    group_id = str(group.get("group_id", "")).strip()
+    return group_name or group_id or "Unnamed group"
+
+
+def _group_identity(group: Dict[str, Any]) -> str:
+    group_name = str(group.get("group_name", "")).strip()
+    group_id = str(group.get("group_id", "")).strip()
+    if group_name and group_id and group_name != group_id:
+        return f"{group_name} ({group_id})"
+    return _group_title(group)
+
+
+def _group_picker_label(group: Dict[str, Any]) -> str:
+    return f"{_group_identity(group)} | respondents: {group.get('total_respondents', 0)}"
+
+
 def _render_paging_controls(
     *,
     prefix: str,
@@ -140,6 +159,13 @@ def render_create_group_page(client: APIClient) -> None:
         return
 
     with st.form("create_group_form"):
+        group_name = st.text_input(
+            "Group Name",
+            value="",
+            max_chars=120,
+            help="Optional display name for this respondent group.",
+        )
+
         st.markdown("#### Persona Composition")
         st.caption("Choose how many respondents to generate for each persona.")
 
@@ -212,6 +238,7 @@ def render_create_group_page(client: APIClient) -> None:
         with st.spinner("Creating respondent group..."):
             created = client.create_group(
                 composition=composition,
+                group_name=group_name.strip() or None,
                 mode=mode,
                 sampling_ratio=float(sampling_ratio),
                 include_names=bool(include_names),
@@ -222,7 +249,7 @@ def render_create_group_page(client: APIClient) -> None:
             st.error("Unable to create respondent group. Please verify API status and payload.")
             return
 
-        st.success(f"Respondent group created: {created.get('group_id', 'unknown')}")
+        st.success(f"Respondent group created: {_group_identity(created)}")
         st.session_state.selected_group_id = created.get("group_id")
         _set_view("group_detail")
         st.rerun()
@@ -257,7 +284,9 @@ def render_groups_list_page(client: APIClient) -> None:
 
         title_col, action_col = st.columns([4, 1])
         with title_col:
-            st.markdown(f"**{group_id}**")
+            st.markdown(f"**{_group_title(group)}**")
+            if group.get("group_name"):
+                st.caption(f"Group ID: {group_id}")
             st.caption(
                 " | ".join(
                     [
@@ -308,13 +337,14 @@ def render_group_detail_page(client: APIClient) -> None:
         if st.button("Refresh", width="stretch"):
             st.rerun()
 
-    st.subheader(f"Respondent Group: {group_id}")
-
     payload = client.get_group(group_id, include_full_profiles=True)
     if not payload:
         st.error("Unable to load group details.")
         return
 
+    st.subheader(f"Respondent Group: {_group_title(payload)}")
+    if payload.get("group_name"):
+        st.caption(f"Group ID: {group_id}")
     st.caption(
         " | ".join(
             [
@@ -596,6 +626,94 @@ def _load_group_options(client: APIClient) -> List[Dict[str, Any]]:
     return _fetch_all_groups(client)
 
 
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _display_metric_value(value: Any) -> Any:
+    return "n/a" if value is None else value
+
+
+def _choice_chart_rows(distribution: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for item in distribution:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "choice": str(item.get("value", "")).strip() or "n/a",
+                "responses": _safe_int(item.get("count", 0)),
+                "share_pct": round(_safe_float(item.get("percentage", 0)) * 100, 1),
+            }
+        )
+    return rows
+
+
+def _rating_chart_rows(distribution: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for item in distribution:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "rating": str(item.get("value", "")).strip() or "n/a",
+                "responses": _safe_int(item.get("count", 0)),
+                "share_pct": round(_safe_float(item.get("percentage", 0)) * 100, 1),
+            }
+        )
+
+    def _rating_sort_key(row: Dict[str, Any]) -> tuple[int, float | str]:
+        value = str(row.get("rating", "")).strip()
+        try:
+            return (0, float(value))
+        except ValueError:
+            return (1, value)
+
+    return sorted(rows, key=_rating_sort_key)
+
+
+def _multiple_choice_pie_chart(rows: List[Dict[str, Any]]) -> alt.Chart:
+    return (
+        alt.Chart(alt.Data(values=rows))
+        .mark_arc()
+        .encode(
+            theta=alt.Theta("responses:Q", title="Responses"),
+            color=alt.Color("choice:N", title="Choice"),
+            tooltip=[
+                alt.Tooltip("choice:N", title="Choice"),
+                alt.Tooltip("responses:Q", title="Responses"),
+                alt.Tooltip("share_pct:Q", title="Share %"),
+            ],
+        )
+    )
+
+
+def _rating_bar_chart(rows: List[Dict[str, Any]]) -> alt.Chart:
+    return (
+        alt.Chart(alt.Data(values=rows))
+        .mark_bar()
+        .encode(
+            x=alt.X("rating:N", title="Rating", sort=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("responses:Q", title="Responses"),
+            tooltip=[
+                alt.Tooltip("rating:N", title="Rating"),
+                alt.Tooltip("responses:Q", title="Responses"),
+                alt.Tooltip("share_pct:Q", title="Share %"),
+            ],
+        )
+    )
+
+
 def _render_statistics_payload(stats: Dict[str, Any]) -> None:
     st.markdown("### Simulation Statistics")
     st.caption(
@@ -621,26 +739,221 @@ def _render_statistics_payload(stats: Dict[str, Any]) -> None:
             st.caption(f"Response rate: {question.get('response_rate', 0)}")
 
             if question.get("choice_distribution"):
+                choice_rows = _choice_chart_rows(question.get("choice_distribution", []))
                 st.markdown("**Choice distribution**")
-                st.json(question.get("choice_distribution"))
+                st.altair_chart(_multiple_choice_pie_chart(choice_rows), width="stretch")
+                st.dataframe(choice_rows, hide_index=True, width="stretch")
 
             if question.get("rating_distribution"):
+                rating_rows = _rating_chart_rows(question.get("rating_distribution", []))
                 st.markdown("**Rating distribution**")
-                st.json(question.get("rating_distribution"))
-                st.caption(
-                    " | ".join(
-                        [
-                            f"Average: {question.get('rating_average')}",
-                            f"Min: {question.get('rating_min')}",
-                            f"Max: {question.get('rating_max')}",
-                        ]
-                    )
-                )
+                st.altair_chart(_rating_bar_chart(rating_rows), width="stretch")
+                metric_avg, metric_min, metric_max = st.columns(3)
+                metric_avg.metric("Average", _display_metric_value(question.get("rating_average")))
+                metric_min.metric("Min", _display_metric_value(question.get("rating_min")))
+                metric_max.metric("Max", _display_metric_value(question.get("rating_max")))
+                st.dataframe(rating_rows, hide_index=True, width="stretch")
 
             if question.get("type") == "open_ended":
                 st.caption(f"Text response count: {question.get('text_response_count', 0)}")
                 st.markdown("**Sample text responses**")
                 st.json(question.get("sample_text_responses", []))
+
+
+def _has_processing_simulations(payload: Dict[str, Any]) -> bool:
+    simulations = payload.get("simulations", []) if isinstance(payload, dict) else []
+    for simulation in simulations:
+        if not isinstance(simulation, dict):
+            continue
+        if str(simulation.get("status", "")).strip().lower() == "processing":
+            return True
+    return False
+
+
+def _render_survey_simulations_body(client: APIClient, survey_id: str, *, auto_refresh: bool) -> None:
+    payload = client.get_survey(survey_id)
+    if not payload:
+        st.error("Unable to load survey details.")
+        return
+
+    st.markdown("### Simulations")
+    if auto_refresh:
+        st.caption("Live progress refreshes every 1 second while simulations are running.")
+
+    if st.button("Run Simulation", type="primary"):
+        st.session_state.show_simulation_form = not st.session_state.show_simulation_form
+        st.rerun()
+
+    if st.session_state.show_simulation_form:
+        with st.container(border=True):
+            st.markdown("#### Run Simulation")
+            st.text_input("Survey ID", value=survey_id, disabled=True)
+
+            groups = _load_group_options(client)
+            group_choices = [
+                _group_picker_label(item)
+                for item in groups
+                if item.get("group_id")
+            ]
+            group_lookup = {
+                _group_picker_label(item): item.get("group_id")
+                for item in groups
+                if item.get("group_id")
+            }
+
+            if not group_choices:
+                st.warning("No respondent groups available. Create a group first.")
+            else:
+                selected_group_label = st.selectbox("Respondent Group", options=group_choices)
+                background = st.checkbox("Run in background", value=True)
+
+                run_col, cancel_col = st.columns(2)
+                with run_col:
+                    run_clicked = st.button("Run", key="run_simulation_confirm", type="primary", width="stretch")
+                with cancel_col:
+                    cancel_clicked = st.button("Cancel", key="run_simulation_cancel", width="stretch")
+
+                if cancel_clicked:
+                    st.session_state.show_simulation_form = False
+                    st.rerun()
+
+                if run_clicked:
+                    selected_group_id = group_lookup.get(selected_group_label)
+                    with st.spinner("Running simulation..."):
+                        result = client.run_survey_simulation(
+                            survey_id=survey_id,
+                            group_id=str(selected_group_id),
+                            background=background,
+                        )
+
+                    if not result:
+                        st.error("Simulation request failed.")
+                    else:
+                        st.success(
+                            f"Simulation started: {result.get('simulation_id', 'n/a')} "
+                            f"(status: {result.get('status', 'n/a')})"
+                        )
+                        st.session_state.show_simulation_form = False
+                        st.rerun()
+
+    simulations = payload.get("simulations", [])
+    if not simulations:
+        st.caption("No simulations yet")
+        return
+
+    stats_cache_key = f"{survey_id}"
+    if stats_cache_key not in st.session_state.survey_stats_cache:
+        st.session_state.survey_stats_cache[stats_cache_key] = {}
+
+    has_processing = False
+    active_stats_id = st.session_state.get("active_statistics_simulation_id")
+    for simulation in simulations:
+        simulation_id = simulation.get("simulation_id", "")
+        if not simulation_id:
+            continue
+
+        status = str(simulation.get("status", "")).strip().lower()
+        if status == "processing":
+            has_processing = True
+
+        progress = simulation.get("progress", {}) if isinstance(simulation, dict) else {}
+        completed = progress.get("completed", 0)
+        pending = progress.get("pending", 0)
+        total_for_progress = completed + pending
+        progress_ratio = (completed / total_for_progress) if total_for_progress > 0 else 0.0
+
+        with st.container(border=True):
+            st.markdown(f"**Simulation ID:** {simulation_id}")
+            st.caption(
+                " | ".join(
+                    [
+                        f"Status: {simulation.get('status', 'n/a')}",
+                        f"Group ID: {simulation.get('group_id', 'n/a')}",
+                        f"Respondents: {simulation.get('total_respondents', 0)}",
+                        f"Progress: {completed} completed / {pending} pending",
+                    ]
+                )
+            )
+            st.progress(progress_ratio, text=f"Progress: {int(round(progress_ratio * 100))}%")
+
+            action_col_1, action_col_2 = st.columns(2)
+
+            with action_col_1:
+                if st.button("Download", key=f"download_sim_{simulation_id}", width="stretch"):
+                    st.session_state.show_download_form_simulation_id = simulation_id
+                    st.session_state.prepared_download_payload = None
+                    st.rerun()
+
+            with action_col_2:
+                if st.button("Statistics", key=f"stats_sim_{simulation_id}", width="stretch"):
+                    with st.spinner("Computing simulation statistics..."):
+                        stats = client.compute_simulation_statistics(
+                            survey_id=survey_id,
+                            simulation_id=simulation_id,
+                        )
+                    if stats:
+                        st.session_state.survey_stats_cache[stats_cache_key][simulation_id] = stats
+                        st.session_state.active_statistics_simulation_id = simulation_id
+                        st.success("Statistics ready")
+                        st.rerun()
+                    st.error("Unable to compute statistics")
+
+            if st.session_state.show_download_form_simulation_id == simulation_id:
+                with st.container(border=True):
+                    st.markdown("Download Simulation Responses")
+                    export_format = st.selectbox(
+                        "Format",
+                        options=["csv", "json"],
+                        index=0,
+                        key=f"download_format_{simulation_id}",
+                    )
+                    prepared = st.session_state.prepared_download_payload
+                    needs_fetch = not (
+                        isinstance(prepared, dict)
+                        and prepared.get("content")
+                        and prepared.get("simulation_id") == simulation_id
+                        and prepared.get("format") == export_format
+                    )
+                    if needs_fetch:
+                        with st.spinner("Preparing file..."):
+                            download_payload = client.download_simulation_responses(
+                                survey_id=survey_id,
+                                simulation_id=simulation_id,
+                                format=export_format,
+                            )
+                        if download_payload:
+                            download_payload["simulation_id"] = simulation_id
+                            download_payload["format"] = export_format
+                            st.session_state.prepared_download_payload = download_payload
+                        else:
+                            st.error("Unable to prepare download")
+
+                    download_col, cancel_col = st.columns(2)
+                    with cancel_col:
+                        if st.button("Cancel", key=f"close_download_{simulation_id}", width="stretch"):
+                            st.session_state.show_download_form_simulation_id = None
+                            st.session_state.prepared_download_payload = None
+                            st.rerun()
+
+                    prepared = st.session_state.prepared_download_payload
+                    with download_col:
+                        if isinstance(prepared, dict) and prepared.get("content"):
+                            st.download_button(
+                                label="Download",
+                                data=prepared["content"],
+                                file_name=str(prepared.get("filename", "responses.csv")),
+                                mime=str(prepared.get("content_type", "application/octet-stream")),
+                                key=f"download_button_{simulation_id}",
+                                width="stretch",
+                            )
+
+            stats = st.session_state.survey_stats_cache.get(stats_cache_key, {}).get(simulation_id)
+            if simulation_id == active_stats_id and isinstance(stats, dict):
+                st.markdown("---")
+                _render_statistics_payload(stats)
+
+    if auto_refresh and not has_processing:
+        st.rerun()
 
 
 def render_survey_detail_page(client: APIClient) -> None:
@@ -690,192 +1003,9 @@ def render_survey_detail_page(client: APIClient) -> None:
                 )
 
     st.markdown("---")
-    st.markdown("### Simulations")
-
-    if st.button("Run Simulation", type="primary"):
-        st.session_state.show_simulation_form = not st.session_state.show_simulation_form
-        st.rerun()
-
-    if st.session_state.show_simulation_form:
-        with st.container(border=True):
-            st.markdown("#### Run Simulation")
-            st.text_input("Survey ID", value=survey_id, disabled=True)
-
-            groups = _load_group_options(client)
-            group_choices = [
-                f"{item.get('group_id', '')} | respondents: {item.get('total_respondents', 0)}"
-                for item in groups
-                if item.get("group_id")
-            ]
-            group_lookup = {
-                f"{item.get('group_id', '')} | respondents: {item.get('total_respondents', 0)}": item.get("group_id")
-                for item in groups
-                if item.get("group_id")
-            }
-
-            if not group_choices:
-                st.warning("No respondent groups available. Create a group first.")
-            else:
-                selected_group_label = st.selectbox("Respondent Group", options=group_choices)
-                background = st.checkbox("Run in background", value=True)
-
-                run_col, cancel_col = st.columns(2)
-                with run_col:
-                    run_clicked = st.button("Run", key="run_simulation_confirm", type="primary", width="stretch")
-                with cancel_col:
-                    cancel_clicked = st.button("Cancel", key="run_simulation_cancel", width="stretch")
-
-                if cancel_clicked:
-                    st.session_state.show_simulation_form = False
-                    st.rerun()
-
-                if run_clicked:
-                    selected_group_id = group_lookup.get(selected_group_label)
-                    with st.spinner("Running simulation..."):
-                        result = client.run_survey_simulation(
-                            survey_id=survey_id,
-                            group_id=str(selected_group_id),
-                            background=background,
-                        )
-
-                    if not result:
-                        st.error("Simulation request failed.")
-                    else:
-                        st.success(
-                            f"Simulation started: {result.get('simulation_id', 'n/a')} "
-                            f"(status: {result.get('status', 'n/a')})"
-                        )
-                        st.session_state.show_simulation_form = False
-                        st.rerun()
-
-    simulations = payload.get("simulations", [])
-    if not simulations:
-        st.caption("No simulations yet")
-        return
-
-    stats_cache_key = f"{survey_id}"
-    if stats_cache_key not in st.session_state.survey_stats_cache:
-        st.session_state.survey_stats_cache[stats_cache_key] = {}
-
-    for simulation in simulations:
-        simulation_id = simulation.get("simulation_id", "")
-        if not simulation_id:
-            continue
-
-        progress = simulation.get("progress", {}) if isinstance(simulation, dict) else {}
-        completed = progress.get("completed", 0)
-        pending = progress.get("pending", 0)
-        total_for_progress = completed + pending
-        progress_ratio = (completed / total_for_progress) if total_for_progress > 0 else 0.0
-
-        with st.container(border=True):
-            st.markdown(f"**Simulation ID:** {simulation_id}")
-            st.caption(
-                " | ".join(
-                    [
-                        f"Status: {simulation.get('status', 'n/a')}",
-                        f"Group ID: {simulation.get('group_id', 'n/a')}",
-                        f"Respondents: {simulation.get('total_respondents', 0)}",
-                        f"Progress: {completed} completed / {pending} pending",
-                    ]
-                )
-            )
-            st.progress(progress_ratio, text=f"Progress: {int(round(progress_ratio * 100))}%")
-
-            action_col_1, action_col_2, action_col_3 = st.columns(3)
-
-            with action_col_1:
-                if st.button("Download", key=f"download_sim_{simulation_id}", width="stretch"):
-                    st.session_state.show_download_form_simulation_id = simulation_id
-                    st.session_state.prepared_download_payload = None
-                    st.rerun()
-
-            with action_col_2:
-                if st.button("Compute Statistics", key=f"stats_sim_{simulation_id}", width="stretch"):
-                    with st.spinner("Computing simulation statistics..."):
-                        stats = client.compute_simulation_statistics(
-                            survey_id=survey_id,
-                            simulation_id=simulation_id,
-                        )
-                    if stats:
-                        st.session_state.survey_stats_cache[stats_cache_key][simulation_id] = stats
-                        st.session_state.active_statistics_simulation_id = simulation_id
-                        st.success("Statistics ready")
-                        st.rerun()
-                    st.error("Unable to compute statistics")
-
-            has_cached_stats = simulation_id in st.session_state.survey_stats_cache[stats_cache_key]
-            stats_ready = bool(simulation.get("statistics_ready", False))
-            with action_col_3:
-                if st.button(
-                    "View Statistics",
-                    key=f"view_stats_sim_{simulation_id}",
-                    disabled=not (has_cached_stats or stats_ready),
-                    width="stretch",
-                ):
-                    if not has_cached_stats and stats_ready:
-                        with st.spinner("Loading cached statistics..."):
-                            stats = client.compute_simulation_statistics(
-                                survey_id=survey_id,
-                                simulation_id=simulation_id,
-                            )
-                        if stats:
-                            st.session_state.survey_stats_cache[stats_cache_key][simulation_id] = stats
-                    st.session_state.active_statistics_simulation_id = simulation_id
-                    st.rerun()
-
-            if st.session_state.show_download_form_simulation_id == simulation_id:
-                with st.container(border=True):
-                    st.markdown("Download Simulation Responses")
-                    export_format = st.selectbox(
-                        "Format",
-                        options=["csv", "json"],
-                        index=0,
-                        key=f"download_format_{simulation_id}",
-                    )
-                    prepared = st.session_state.prepared_download_payload
-                    needs_fetch = not (
-                        isinstance(prepared, dict)
-                        and prepared.get("content")
-                        and prepared.get("simulation_id") == simulation_id
-                        and prepared.get("format") == export_format
-                    )
-                    if needs_fetch:
-                        with st.spinner("Preparing file..."):
-                            download_payload = client.download_simulation_responses(
-                                survey_id=survey_id,
-                                simulation_id=simulation_id,
-                                format=export_format,
-                            )
-                        if download_payload:
-                            download_payload["simulation_id"] = simulation_id
-                            download_payload["format"] = export_format
-                            st.session_state.prepared_download_payload = download_payload
-                        else:
-                            st.error("Unable to prepare download")
-
-                    download_col, cancel_col = st.columns(2)
-                    with cancel_col:
-                        if st.button("Cancel", key=f"close_download_{simulation_id}", width="stretch"):
-                            st.session_state.show_download_form_simulation_id = None
-                            st.session_state.prepared_download_payload = None
-                            st.rerun()
-
-                    prepared = st.session_state.prepared_download_payload
-                    with download_col:
-                        if isinstance(prepared, dict) and prepared.get("content"):
-                            st.download_button(
-                                label="Download",
-                                data=prepared["content"],
-                                file_name=str(prepared.get("filename", "responses.csv")),
-                                mime=str(prepared.get("content_type", "application/octet-stream")),
-                                key=f"download_button_{simulation_id}",
-                                use_container_width=True,
-                            )
-
-    active_stats_id = st.session_state.get("active_statistics_simulation_id")
-    if active_stats_id:
-        stats = st.session_state.survey_stats_cache.get(stats_cache_key, {}).get(active_stats_id)
-        if isinstance(stats, dict):
-            st.markdown("---")
-            _render_statistics_payload(stats)
+    auto_refresh = _has_processing_simulations(payload)
+    simulations_fragment = st.fragment(
+        _render_survey_simulations_body,
+        run_every="1s" if auto_refresh else None,
+    )
+    simulations_fragment(client, survey_id, auto_refresh=auto_refresh)

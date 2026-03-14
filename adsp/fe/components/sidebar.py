@@ -11,7 +11,7 @@ def render_sidebar(client: APIClient):
     with st.sidebar:
         # User info
         st.html(f"""
-            <div style="font-size: 2rem; font-weight: bold; color: #f3f7fb; margin-bottom: 1rem;">
+            <div class="sidebar-welcome">
                 Welcome, {st.session_state.username}
             </div>
         """)
@@ -39,8 +39,9 @@ def render_sidebar(client: APIClient):
         
         st.markdown("---")
 
-        # Survey tooling navigation
-        st.markdown("### Respondent Groups")
+        # Survey simulation navigation
+        st.markdown("### Survey Simulation")
+        st.caption("Respondent Groups")
         if st.button("Create Respondent Group", key="nav_create_group", width="stretch"):
             reset_management_ui_state()
             st.session_state.current_view = "groups_create"
@@ -50,7 +51,7 @@ def render_sidebar(client: APIClient):
             st.session_state.current_view = "groups_list"
             st.rerun()
 
-        st.markdown("### Surveys")
+        st.caption("Surveys")
         if st.button("Create Survey", key="nav_create_survey", width="stretch"):
             reset_management_ui_state()
             st.session_state.current_view = "surveys_create"
@@ -62,8 +63,8 @@ def render_sidebar(client: APIClient):
 
         st.markdown("---")
         
-        # Persona selection
-        st.markdown("### Select Persona")
+        # Persona chat navigation
+        st.markdown("### Persona Chat")
         
         # Load personas if not already loaded
         if not st.session_state.personas:

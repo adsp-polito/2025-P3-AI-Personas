@@ -140,3 +140,25 @@ def test_survey_and_group_paths_expose_get_and_post():
     assert 'post' in paths['/api/groups']
 
     assert 'get' in paths['/api/surveys/{survey_id}/statistics']
+
+
+def test_group_schemas_include_optional_group_name():
+    schema = _schema()
+    components = schema.get('components', {})
+    schemas = components.get('schemas', {})
+
+    create_request = schemas['GroupCreateRequest']
+    create_response = schemas['GroupCreateResponse']
+    fetch_response = schemas['GroupFetchResponse']
+    list_item_response = schemas['GroupsListItemResponse']
+
+    group_name_request = create_request['properties']['group_name']
+    group_name_request_types = {item['type'] for item in group_name_request.get('anyOf', [])}
+
+    assert 'group_name' in create_request['properties']
+    assert group_name_request_types == {'null', 'string'}
+    assert 'group_name' not in create_request.get('required', [])
+
+    assert 'group_name' in create_response['properties']
+    assert 'group_name' in fetch_response['properties']
+    assert 'group_name' in list_item_response['properties']

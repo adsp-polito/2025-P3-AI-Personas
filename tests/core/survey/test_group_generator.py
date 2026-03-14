@@ -98,6 +98,22 @@ def test_create_group_random_mode(traits_dir: Path, tmp_path: Path):
     assert len(loaded.respondents) == 3
 
 
+def test_create_group_persists_optional_group_name(traits_dir: Path, tmp_path: Path):
+    generator = GroupGenerator(base_dir=tmp_path / "surveys", traits_dirs=[traits_dir])
+
+    group = generator.create_group(
+        composition=[{"persona_id": "test-persona", "count": 1}],
+        mode="random",
+        group_name="  Espresso Fans Milan  ",
+        seed=11,
+    )
+
+    assert group.group_name == "Espresso Fans Milan"
+
+    loaded = generator.get_group(group.group_id)
+    assert loaded.group_name == "Espresso Fans Milan"
+
+
 def test_create_group_with_country_filter(traits_dir: Path, tmp_path: Path):
     generator = GroupGenerator(base_dir=tmp_path / "surveys", traits_dirs=[traits_dir])
     group = generator.create_group(
@@ -156,6 +172,7 @@ def test_get_group_supports_legacy_single_file_format(tmp_path: Path):
 
     payload = {
         "group_id": "legacy-group",
+        "group_name": "Legacy Named Group",
         "created_at": "2026-03-08T00:00:00+00:00",
         "composition": [{"persona_id": "test-persona", "count": 1}],
         "respondents": [
@@ -181,4 +198,5 @@ def test_get_group_supports_legacy_single_file_format(tmp_path: Path):
     group = generator.get_group("legacy-group")
 
     assert group.group_id == "legacy-group"
+    assert group.group_name == "Legacy Named Group"
     assert len(group.respondents) == 1

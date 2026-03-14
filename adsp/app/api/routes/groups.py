@@ -45,6 +45,7 @@ class GroupCreateRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
+                "group_name": "Q2 Italy test panel",
                 "composition": [
                     {"persona_id": "curious-connoisseurs", "count": 25},
                     {"persona_id": "conscious-explorers", "count": 15},
@@ -58,6 +59,10 @@ class GroupCreateRequest(BaseModel):
         }
     )
 
+    group_name: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable label for the respondent group.",
+    )
     composition: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="Group composition list with `persona_id` and `count` per segment.",
@@ -83,6 +88,7 @@ class GroupCreateResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "group_id": "group-ab12cd34",
+                "group_name": "Q2 Italy test panel",
                 "created_at": "2026-03-08T15:40:03.123000+00:00",
                 "total_respondents": 40,
                 "composition": [
@@ -105,6 +111,7 @@ class GroupCreateResponse(BaseModel):
     )
 
     group_id: str = Field(description="Generated respondent group identifier.")
+    group_name: Optional[str] = Field(default=None, description="Optional human-readable label for the group.")
     created_at: str = Field(description="Group creation timestamp in ISO-8601 format.")
     total_respondents: int = Field(description="Total number of generated respondents.")
     composition: List[Dict[str, Any]] = Field(default_factory=list, description="Normalized requested composition.")
@@ -120,6 +127,7 @@ class GroupFetchResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "group_id": "group-ab12cd34",
+                "group_name": "Q2 Italy test panel",
                 "created_at": "2026-03-08T15:40:03.123000+00:00",
                 "total_respondents": 40,
                 "composition": [{"persona_id": "curious-connoisseurs", "count": 25}],
@@ -140,6 +148,7 @@ class GroupFetchResponse(BaseModel):
     )
 
     group_id: str = Field(description="Respondent group identifier.")
+    group_name: Optional[str] = Field(default=None, description="Optional human-readable label for the group.")
     created_at: str = Field(description="Group creation timestamp.")
     total_respondents: int = Field(description="Total respondents in this group.")
     composition: List[Dict[str, Any]] = Field(default_factory=list, description="Group composition by persona segment.")
@@ -156,6 +165,7 @@ class GroupsListItemResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "group_id": "group-ab12cd34",
+                "group_name": "Q2 Italy test panel",
                 "created_at": "2026-03-08T15:40:03.123000+00:00",
                 "total_respondents": 40,
                 "composition": [{"persona_id": "curious-connoisseurs", "count": 25}],
@@ -175,6 +185,7 @@ class GroupsListItemResponse(BaseModel):
     )
 
     group_id: str = Field(description="Respondent group identifier.")
+    group_name: Optional[str] = Field(default=None, description="Optional human-readable label for the group.")
     created_at: str = Field(description="Group creation timestamp.")
     total_respondents: int = Field(description="Total respondents in this group.")
     composition: List[Dict[str, Any]] = Field(default_factory=list, description="Group composition by persona segment.")
@@ -264,6 +275,7 @@ def register_group_routes(
             group = services.groups.create_group(
                 payload.composition,
                 mode=payload.mode,
+                group_name=payload.group_name,
                 sampling_ratio=payload.sampling_ratio,
                 include_names=payload.include_names,
                 countries=payload.countries,
@@ -280,6 +292,7 @@ def register_group_routes(
         ]
         return GroupCreateResponse(
             group_id=group.group_id,
+            group_name=group.group_name,
             created_at=_to_iso(group.created_at),
             total_respondents=len(group.respondents),
             composition=[
@@ -332,6 +345,7 @@ def register_group_routes(
             items.append(
                 GroupsListItemResponse(
                     group_id=group.group_id,
+                    group_name=group.group_name,
                     created_at=_to_iso(group.created_at),
                     total_respondents=len(group.respondents),
                     composition=[
@@ -379,6 +393,7 @@ def register_group_routes(
         ]
         return GroupFetchResponse(
             group_id=group.group_id,
+            group_name=group.group_name,
             created_at=_to_iso(group.created_at),
             total_respondents=len(group.respondents),
             composition=[
