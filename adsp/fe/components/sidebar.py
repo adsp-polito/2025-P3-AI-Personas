@@ -2,7 +2,7 @@
 
 import streamlit as st
 from adsp.fe.api_client import APIClient
-from adsp.fe.state import create_new_session, get_active_session
+from adsp.fe.state import get_active_session, get_sidebar_visible_personas, reset_management_ui_state
 
 
 def render_sidebar(client: APIClient):
@@ -29,10 +29,37 @@ def render_sidebar(client: APIClient):
             st.session_state.active_session_id = None
             st.session_state.show_context = False
             st.session_state.top_k = 5
+            st.session_state.current_view = "chat"
+            st.session_state.selected_group_id = None
+            st.session_state.selected_survey_id = None
+            reset_management_ui_state()
             
             st.session_state.api_url = api_url  # Restore API URL
             st.rerun()
         
+        st.markdown("---")
+
+        # Survey tooling navigation
+        st.markdown("### Respondent Groups")
+        if st.button("Create Respondent Group", key="nav_create_group", width="stretch"):
+            reset_management_ui_state()
+            st.session_state.current_view = "groups_create"
+            st.rerun()
+        if st.button("View Respondent Groups", key="nav_list_groups", width="stretch"):
+            reset_management_ui_state()
+            st.session_state.current_view = "groups_list"
+            st.rerun()
+
+        st.markdown("### Surveys")
+        if st.button("Create Survey", key="nav_create_survey", width="stretch"):
+            reset_management_ui_state()
+            st.session_state.current_view = "surveys_create"
+            st.rerun()
+        if st.button("View Surveys", key="nav_list_surveys", width="stretch"):
+            reset_management_ui_state()
+            st.session_state.current_view = "surveys_list"
+            st.rerun()
+
         st.markdown("---")
         
         # Persona selection
@@ -49,18 +76,10 @@ def render_sidebar(client: APIClient):
             return
         
         # Display personas as buttons
-        for persona in st.session_state.personas:
+        for persona in get_sidebar_visible_personas(st.session_state.personas):
             persona_id = persona.get("persona_id", "")
             persona_name = persona.get("persona_name", persona_id)
             summary_bio = persona.get("summary_bio", "")
-            
-            # Skip invalid personas
-            if not persona_id or persona_id == "None" or not persona_name or persona_name in ["Classic Local"]:
-                continue
-
-            name_parts = persona_name.replace("-", " ").split()
-            if len(name_parts) > 2 or len(name_parts) < 2:
-                continue
             
             # Check if this is the active persona
             active_session = get_active_session()
@@ -76,6 +95,8 @@ def render_sidebar(client: APIClient):
                         "persona_id": persona_id,
                         "persona_name": persona_name
                     }
+                    reset_management_ui_state()
+                    st.session_state.current_view = "chat"
                     st.rerun()
                 
                 if summary_bio:
@@ -106,6 +127,8 @@ def render_sidebar(client: APIClient):
                     ):
                         st.session_state.active_session_id = session_id
                         st.session_state.show_name_input = False
+                        reset_management_ui_state()
+                        st.session_state.current_view = "chat"
                         st.rerun()
                 
                 with col2:

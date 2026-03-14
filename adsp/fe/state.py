@@ -74,6 +74,65 @@ def initialize_session_state():
     if "selected_persona_for_name" not in st.session_state:
         st.session_state.selected_persona_for_name = None
 
+    if "current_view" not in st.session_state:
+        st.session_state.current_view = "chat"
+
+    if "selected_group_id" not in st.session_state:
+        st.session_state.selected_group_id = None
+
+    if "selected_survey_id" not in st.session_state:
+        st.session_state.selected_survey_id = None
+
+    if "groups_page" not in st.session_state:
+        st.session_state.groups_page = 1
+
+    if "surveys_page" not in st.session_state:
+        st.session_state.surveys_page = 1
+
+    if "survey_questions_draft" not in st.session_state:
+        st.session_state.survey_questions_draft = []
+
+    if "survey_stats_cache" not in st.session_state:
+        st.session_state.survey_stats_cache = {}
+
+    if "active_statistics_simulation_id" not in st.session_state:
+        st.session_state.active_statistics_simulation_id = None
+
+    if "show_simulation_form" not in st.session_state:
+        st.session_state.show_simulation_form = False
+
+    if "show_download_form_simulation_id" not in st.session_state:
+        st.session_state.show_download_form_simulation_id = None
+
+    if "prepared_download_payload" not in st.session_state:
+        st.session_state.prepared_download_payload = None
+
+
+def get_sidebar_visible_personas(personas: List[dict]) -> List[dict]:
+    """Return personas visible in the sidebar persona list."""
+    visible: List[dict] = []
+    for persona in personas:
+        persona_id = str(persona.get("persona_id", ""))
+        persona_name = str(persona.get("persona_name", persona_id))
+
+        if not persona_id or persona_id == "None" or not persona_name or persona_name in ["Classic Local"]:
+            continue
+
+        name_parts = persona_name.replace("-", " ").split()
+        if len(name_parts) > 2 or len(name_parts) < 2:
+            continue
+
+        visible.append(persona)
+    return visible
+
+
+def reset_management_ui_state() -> None:
+    """Collapse transient management UI panels."""
+    st.session_state.show_simulation_form = False
+    st.session_state.show_download_form_simulation_id = None
+    st.session_state.prepared_download_payload = None
+    st.session_state.active_statistics_simulation_id = None
+
 
 def get_active_session() -> Optional[ChatSession]:
     """Get the currently active chat session."""

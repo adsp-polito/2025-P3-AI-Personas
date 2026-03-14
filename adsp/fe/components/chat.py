@@ -9,6 +9,14 @@ from adsp.fe.state import (
 )
 from adsp.fe.components.sidebar import render_sidebar
 from adsp.fe.components.messages import render_message, render_citations
+from adsp.fe.components.survey_management import (
+    render_create_group_page,
+    render_groups_list_page,
+    render_group_detail_page,
+    render_create_survey_page,
+    render_surveys_list_page,
+    render_survey_detail_page,
+)
 
 def render_name_input_dialog():
     """Render dialog for entering custom persona name."""
@@ -80,6 +88,26 @@ def render_chat_page():
     
     # Main chat area
     st.html('<div class="main-header">Lavazza AI Personas</div>')
+
+    current_view = st.session_state.get("current_view", "chat")
+    if current_view == "groups_create":
+        render_create_group_page(client)
+        return
+    if current_view == "groups_list":
+        render_groups_list_page(client)
+        return
+    if current_view == "group_detail":
+        render_group_detail_page(client)
+        return
+    if current_view == "surveys_create":
+        render_create_survey_page(client)
+        return
+    if current_view == "surveys_list":
+        render_surveys_list_page(client)
+        return
+    if current_view == "survey_detail":
+        render_survey_detail_page(client)
+        return
     
     # Get active session
     active_session = get_active_session()

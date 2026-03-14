@@ -14,6 +14,14 @@ class APIClient:
     base_url: str
     username: Optional[str] = None
     token: Optional[str] = None
+
+    def _safe_json(self, response: requests.Response) -> Dict[str, Any]:
+        """Parse JSON payload safely and return a dictionary fallback."""
+        try:
+            data = response.json()
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
     
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers with authentication."""
@@ -52,7 +60,7 @@ class APIClient:
                 timeout=5,
             )
             if response.status_code == 200:
-                data = response.json()
+                data = self._safe_json(response)
                 return data.get("authorized", False)
             return False
         except Exception:
@@ -67,7 +75,7 @@ class APIClient:
                 timeout=10,
             )
             if response.status_code == 200:
-                data = response.json()
+                data = self._safe_json(response)
                 return data.get("personas", [])
             return []
         except Exception:
@@ -96,7 +104,7 @@ class APIClient:
                 timeout=10,
             )
             if response.status_code == 200:
-                data = response.json()
+                data = self._safe_json(response)
                 return data.get("system_prompt")
             return None
         except Exception:
@@ -129,11 +137,271 @@ class APIClient:
                 timeout=(5, 120),  # (connect, read)
             )
             if response.status_code == 200:
-                data = response.json()
+                data = self._safe_json(response)
                 return data.get("response")
             return None
         except Exception as e:
             print(f"Error sending chat message: {e}")
+            return None
+
+    def create_group(
+        self,
+        composition: List[Dict[str, Any]],
+        mode: str = "random",
+        sampling_ratio: float = 0.7,
+        include_names: bool = True,
+        countries: Optional[List[str]] = None,
+        seed: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a respondent group."""
+        try:
+            payload: Dict[str, Any] = {
+                "composition": composition,
+                "mode": mode,
+                "sampling_ratio": sampling_ratio,
+                "include_names": include_names,
+            }
+            if countries is not None:
+                payload["countries"] = countries
+            if seed is not None:
+                payload["seed"] = seed
+
+            response = requests.post(
+                f"{self.base_url}/api/groups",
+                json=payload,
+                headers=self._get_headers(),
+                timeout=60,
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error creating respondent group: {e}")
+            return None
+
+    def list_groups(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+        """List respondent groups with pagination."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/groups",
+                params={"page": page, "page_size": page_size},
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if response.status_code == 200:
+                data = self._safe_json(response)
+                if "items" in data and "paging" in data:
+                    return data
+            return {
+                "items": [],
+                "paging": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total_items": 0,
+                    "total_pages": 1,
+                },
+            }
+        except Exception as e:
+            print(f"Error listing respondent groups: {e}")
+            return {
+                "items": [],
+                "paging": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total_items": 0,
+                    "total_pages": 1,
+                },
+            }
+
+    def list_available_countries(self) -> List[Dict[str, Any]]:
+        """List available countries supported for respondent generation."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/groups/countries",
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if response.status_code == 200:
+                data = self._safe_json(response)
+                countries = data.get("countries", [])
+                return countries if isinstance(countries, list) else []
+            return []
+        except Exception as e:
+            print(f"Error listing available countries: {e}")
+            return []
+
+    def get_group(self, group_id: str, include_full_profiles: bool = False) -> Optional[Dict[str, Any]]:
+        """Get one respondent group by id."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/groups/{group_id}",
+                params={"include_full_profiles": include_full_profiles},
+                headers=self._get_headers(),
+                timeout=60,
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error fetching respondent group: {e}")
+            return None
+
+    def list_surveys(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+        """List surveys with pagination."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/surveys",
+                params={"page": page, "page_size": page_size},
+                headers=self._get_headers(),
+                timeout=30,
+            )
+            if response.status_code == 200:
+                data = self._safe_json(response)
+                if "items" in data and "paging" in data:
+                    return data
+            return {
+                "items": [],
+                "paging": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total_items": 0,
+                    "total_pages": 1,
+                },
+            }
+        except Exception as e:
+            print(f"Error listing surveys: {e}")
+            return {
+                "items": [],
+                "paging": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total_items": 0,
+                    "total_pages": 1,
+                },
+            }
+
+    def create_survey(
+        self,
+        title: str,
+        description: str,
+        questions: List[Dict[str, Any]],
+        survey_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create and persist a survey."""
+        try:
+            payload: Dict[str, Any] = {
+                "title": title,
+                "description": description,
+                "questions": questions,
+            }
+            if survey_id:
+                payload["survey_id"] = survey_id
+
+            response = requests.post(
+                f"{self.base_url}/api/surveys",
+                json=payload,
+                headers=self._get_headers(),
+                timeout=60,
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error creating survey: {e}")
+            return None
+
+    def get_survey(self, survey_id: str) -> Optional[Dict[str, Any]]:
+        """Get one survey by id."""
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/surveys/{survey_id}",
+                headers=self._get_headers(),
+                timeout=60,
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error fetching survey: {e}")
+            return None
+
+    def run_survey_simulation(
+        self,
+        survey_id: str,
+        group_id: str,
+        background: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Run a survey simulation for a given survey and respondent group."""
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/surveys/{survey_id}/simulate",
+                params={"background": background},
+                json={"group_id": group_id},
+                headers=self._get_headers(),
+                timeout=(5, 300),
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error running survey simulation: {e}")
+            return None
+
+    def download_simulation_responses(
+        self,
+        survey_id: str,
+        simulation_id: Optional[str] = None,
+        format: str = "csv",
+    ) -> Optional[Dict[str, Any]]:
+        """Download simulation responses as CSV or JSON file content."""
+        try:
+            params: Dict[str, Any] = {"format": format}
+            if simulation_id:
+                params["simulation_id"] = simulation_id
+
+            response = requests.get(
+                f"{self.base_url}/api/surveys/{survey_id}/responses",
+                params=params,
+                headers=self._get_headers(),
+                timeout=(5, 300),
+            )
+            if response.status_code == 200:
+                filename = f"{survey_id}-{simulation_id or 'latest'}-responses.{format}"
+                content_disposition = response.headers.get("Content-Disposition", "")
+                if "filename=" in content_disposition:
+                    filename = content_disposition.split("filename=")[-1].strip().strip('"')
+                return {
+                    "filename": filename,
+                    "content_type": response.headers.get("Content-Type", "application/octet-stream"),
+                    "content": response.content,
+                }
+            return None
+        except Exception as e:
+            print(f"Error downloading simulation responses: {e}")
+            return None
+
+    def compute_simulation_statistics(
+        self,
+        survey_id: str,
+        simulation_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Compute statistics for a survey simulation."""
+        try:
+            params: Dict[str, Any] = {}
+            if simulation_id:
+                params["simulation_id"] = simulation_id
+
+            response = requests.get(
+                f"{self.base_url}/api/surveys/{survey_id}/statistics",
+                params=params,
+                headers=self._get_headers(),
+                timeout=(5, 300),
+            )
+            if response.status_code == 200:
+                return self._safe_json(response)
+            return None
+        except Exception as e:
+            print(f"Error computing simulation statistics: {e}")
             return None
     
     def upload_file(
