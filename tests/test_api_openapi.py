@@ -93,6 +93,43 @@ def test_schema_has_openapi_version():
     assert isinstance(schema.get('openapi'), str)
 
 
+def test_schema_exposes_swagger_servers(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv('ADSP_API_HOST', raising=False)
+    monkeypatch.delenv('ADSP_API_PORT', raising=False)
+    monkeypatch.delenv('ADSP_API_DOCS_SERVER_SCHEME', raising=False)
+    monkeypatch.delenv('ADSP_API_DOCS_SERVER_HOST', raising=False)
+    monkeypatch.delenv('ADSP_API_DOCS_SERVER_BASE_PATH', raising=False)
+
+    schema = _schema()
+    servers = schema.get('servers', [])
+    assert isinstance(servers, list)
+    assert len(servers) >= 2
+
+    assert servers[0]['url'] == '/'
+    assert servers[1]['url'] == '{scheme}://{host}{base_path}'
+
+    variables = servers[1].get('variables', {})
+    assert variables['scheme']['default'] == 'http'
+    assert variables['host']['default'] == 'localhost:8000'
+    assert variables['base_path']['default'] == ''
+
+
+def test_schema_uses_env_defaults_for_swagger_server(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv('ADSP_API_HOST', '0.0.0.0')
+    monkeypatch.setenv('ADSP_API_PORT', '9000')
+    monkeypatch.setenv('ADSP_API_DOCS_SERVER_SCHEME', 'https')
+    monkeypatch.delenv('ADSP_API_DOCS_SERVER_HOST', raising=False)
+    monkeypatch.setenv('ADSP_API_DOCS_SERVER_BASE_PATH', 'gateway/api')
+
+    schema = _build_app().openapi()
+    servers = schema['servers']
+    variables = servers[1]['variables']
+
+    assert variables['scheme']['default'] == 'https'
+    assert variables['host']['default'] == 'localhost:9000'
+    assert variables['base_path']['default'] == '/gateway/api'
+
+
 def test_survey_and_group_paths_expose_get_and_post():
     paths = _paths()
 

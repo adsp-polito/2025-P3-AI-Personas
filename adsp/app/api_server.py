@@ -116,11 +116,110 @@ class AppServices:
     responses: Any
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_csv(name: str, default: list[str]) -> list[str]:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _cors_middleware_options() -> dict[str, Any]:
+    frontend_port = os.environ.get("ADSP_FE_PORT", "8501").strip() or "8501"
+    allow_origins = _env_csv(
+        "ADSP_API_CORS_ALLOW_ORIGINS",
+        [
+            f"http://localhost:{frontend_port}",
+            f"http://127.0.0.1:{frontend_port}",
+        ],
+    )
+    options: dict[str, Any] = {
+        "allow_origins": allow_origins,
+        "allow_credentials": _env_flag("ADSP_API_CORS_ALLOW_CREDENTIALS", False),
+        "allow_methods": _env_csv("ADSP_API_CORS_ALLOW_METHODS", ["*"]),
+        "allow_headers": _env_csv("ADSP_API_CORS_ALLOW_HEADERS", ["*"]),
+    }
+    expose_headers = _env_csv("ADSP_API_CORS_EXPOSE_HEADERS", [])
+    if expose_headers:
+        options["expose_headers"] = expose_headers
+
+    allow_origin_regex = os.environ.get("ADSP_API_CORS_ALLOW_ORIGIN_REGEX", "").strip()
+    if allow_origin_regex:
+        options["allow_origin_regex"] = allow_origin_regex
+
+    return options
+
+
+def _default_docs_server_host() -> str:
+    bind_host = os.environ.get("ADSP_API_HOST", "localhost").strip() or "localhost"
+    if bind_host in {"0.0.0.0", "::", "[::]"}:
+        bind_host = "localhost"
+
+    bind_port = os.environ.get("ADSP_API_PORT", "8000").strip() or "8000"
+    return f"{bind_host}:{bind_port}"
+
+
+def _normalize_docs_server_base_path(raw: str) -> str:
+    base_path = raw.strip()
+    if not base_path:
+        return ""
+    if not base_path.startswith("/"):
+        return f"/{base_path}"
+    return base_path
+
+
+def _openapi_servers() -> list[dict[str, Any]]:
+    default_scheme = os.environ.get("ADSP_API_DOCS_SERVER_SCHEME", "http").strip().lower() or "http"
+    if default_scheme not in {"http", "https"}:
+        default_scheme = "http"
+
+    default_host = os.environ.get("ADSP_API_DOCS_SERVER_HOST", _default_docs_server_host()).strip()
+    if not default_host:
+        default_host = _default_docs_server_host()
+
+    default_base_path = _normalize_docs_server_base_path(
+        os.environ.get("ADSP_API_DOCS_SERVER_BASE_PATH", "")
+    )
+
+    return [
+        {
+            "url": "/",
+            "description": "Use the same origin as the loaded Swagger UI page.",
+        },
+        {
+            "url": "{scheme}://{host}{base_path}",
+            "description": "Editable API base URL for Swagger UI try-it-out requests.",
+            "variables": {
+                "scheme": {
+                    "default": default_scheme,
+                    "enum": ["http", "https"],
+                    "description": "Protocol used by the API server.",
+                },
+                "host": {
+                    "default": default_host,
+                    "description": "API host and optional port, for example localhost:8000.",
+                },
+                "base_path": {
+                    "default": default_base_path,
+                    "description": "Optional URL prefix when the API is mounted behind a proxy.",
+                },
+            },
+        },
+    ]
+
+
 def create_app() -> Any:
     """Create and configure the FastAPI application."""
 
     _require_fastapi()
     from fastapi import Depends, FastAPI, Header, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
 
     title = os.environ.get("ADSP_API_TITLE", "Lavazza AI Personas API")
     version = os.environ.get("ADSP_API_VERSION", "0.1.0")
@@ -135,11 +234,13 @@ def create_app() -> Any:
         title=title,
         version=version,
         description=description,
+        servers=_openapi_servers(),
         debug=debug,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+    app.add_middleware(CORSMiddleware, **_cors_middleware_options())
 
     @app.on_event("startup")
     def _startup() -> None:

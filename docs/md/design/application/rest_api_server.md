@@ -415,6 +415,11 @@ Environment variables (see `.env.example`):
   - `ADSP_API_HOST` (default `0.0.0.0`)
   - `ADSP_API_PORT` (default `8000`)
   - `ADSP_API_RELOAD` (default `true`)
+  - `ADSP_API_CORS_ALLOW_ORIGINS` (defaults to `http://localhost:8501,http://127.0.0.1:8501`)
+  - `ADSP_API_CORS_ALLOW_METHODS`, `ADSP_API_CORS_ALLOW_HEADERS`
+  - `ADSP_API_CORS_EXPOSE_HEADERS`
+  - `ADSP_API_CORS_ALLOW_CREDENTIALS` (default `false`)
+  - `ADSP_API_CORS_ALLOW_ORIGIN_REGEX`
   - `ADSP_REQUIRE_AUTH` (default `false`)
 - Data paths:
   - `ADSP_PERSONAS_DIR`

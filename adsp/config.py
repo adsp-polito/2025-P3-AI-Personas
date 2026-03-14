@@ -5,11 +5,12 @@ import sys
 from dotenv import load_dotenv
 from loguru import logger
 
-# Load environment variables from .env file if it exists
-load_dotenv()
-
 # Paths
 PROJ_ROOT = Path(__file__).resolve().parents[1]
+ENV_FILE = PROJ_ROOT / ".env"
+
+# Load environment variables from the repository .env file if it exists.
+load_dotenv(ENV_FILE)
 # logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
 
 DATA_DIR = PROJ_ROOT / "data"

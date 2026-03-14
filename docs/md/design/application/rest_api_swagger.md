@@ -5,6 +5,15 @@ The REST server is implemented with FastAPI, which generates the Swagger/OpenAPI
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
+Swagger UI includes a `Servers` selector for `Try it out` requests:
+- `/` targets the same origin as the loaded docs page
+- an editable server template allows changing protocol, host, port, and optional base path
+
+Default values for the editable server can be configured with:
+- `ADSP_API_DOCS_SERVER_SCHEME`
+- `ADSP_API_DOCS_SERVER_HOST`
+- `ADSP_API_DOCS_SERVER_BASE_PATH`
+
 ## Quick export (optional)
 
 Once dependencies are installed, you can export the OpenAPI JSON to a file:

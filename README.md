@@ -123,6 +123,10 @@ python scripts/run_api.py
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 
+Swagger UI now exposes a `Servers` selector:
+- `/` uses the same origin as the loaded docs page
+- an editable server template lets you change protocol, host, port, and optional base path before using `Try it out`
+
 Advanced options:
 
 ```bash
@@ -140,6 +144,14 @@ Environment variables:
 - `ADSP_API_WORKERS`: worker process count for uvicorn mode. Use `ADSP_API_RELOAD=false` when setting this above `1`.
 - `ADSP_API_DEBUG`: `true`/`false`
 - `ADSP_API_LOG_LEVEL`: `INFO`, `DEBUG`, `ERROR`, etc. Case-insensitive.
+- `ADSP_API_DOCS_SERVER_SCHEME`: default Swagger server protocol (`http` or `https`)
+- `ADSP_API_DOCS_SERVER_HOST`: default Swagger server host, including optional port
+- `ADSP_API_DOCS_SERVER_BASE_PATH`: default Swagger server base path prefix (for reverse proxies or gateways)
+- `ADSP_API_CORS_ALLOW_ORIGINS`: comma-separated allowed browser origins. Defaults to the local Streamlit frontend on port `8501`.
+- `ADSP_API_CORS_ALLOW_METHODS`, `ADSP_API_CORS_ALLOW_HEADERS`: comma-separated CORS method/header allowlists
+- `ADSP_API_CORS_EXPOSE_HEADERS`: comma-separated response headers exposed to browsers
+- `ADSP_API_CORS_ALLOW_CREDENTIALS`: `true`/`false`
+- `ADSP_API_CORS_ALLOW_ORIGIN_REGEX`: optional regex for allowed origins
 
 #### Frontend UI
 
